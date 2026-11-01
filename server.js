@@ -23,8 +23,10 @@ app.use(express.static('public'));
 io.on('connection', (socket) => {
   socket.on('register', (nickname) => {
     if (!nickname || nickname.length < 2) return socket.emit('error', 'Ник слишком короткий');
+    
     let player = data.players[nickname];
     
+    // Если игрок новый - создаем
     if (!player) {
       player = {
         nickname, level: 1, exp: 0, credits: 100, energy: 50, maxEnergy: 50, shards: 0,
@@ -39,30 +41,38 @@ io.on('connection', (socket) => {
       };
       data.players[nickname] = player;
       saveData(data);
+    } else {
+      // МИГРАЦИЯ СТАРЫХ ДАННЫХ (чтобы не было пустого экрана)
+      if (player.incomeLevel === undefined) player.incomeLevel = 1;
+      if (player.playerClass === undefined) player.playerClass = null;
+      if (player.maxEnergy === undefined) player.maxEnergy = 50;
+      if (player.shards === undefined) player.shards = 0;
+      if (!player.buildings) {
+        player.buildings = {
+          house: { level: 1, upgrading: false, upgradeEnd: 0 },
+          forge: { level: 1, upgrading: false, upgradeEnd: 0 },
+          shrine: { level: 1, upgrading: false, upgradeEnd: 0 },
+          datacenter: { level: 1, upgrading: false, upgradeEnd: 0 }
+        };
+      }
+      saveData(data);
     }
     
     socket.nickname = nickname;
     socket.emit('registered', player);
   });
 
-  // Выбор класса
   socket.on('setClass', (className) => {
     const player = data.players[socket.nickname];
-    if (!player || player.playerClass) return;
+    if (!player) return;
     
-    player.playerClass = className;
-    
-    // Бонусы за класс
-    if (className === 'samurai') {
-      player.buildings.forge.level = 2;
-    } else if (className === 'monk') {
-      player.maxEnergy += 50;
-      player.energy += 50;
-    } else if (className === 'merchant') {
-      player.credits += 500;
+    if (!player.playerClass) {
+      player.playerClass = className;
+      if (className === 'samurai') player.buildings.forge.level = 2;
+      if (className === 'monk') { player.maxEnergy += 50; player.energy += 50; }
+      if (className === 'merchant') player.credits += 500;
+      saveData(data);
     }
-
-    saveData(data);
     socket.emit('classUpdated', player);
   });
 
@@ -81,22 +91,19 @@ io.on('connection', (socket) => {
     if (!socket.nickname || !msg.trim()) return;
     const player = data.players[socket.nickname];
     const guildName = player?.guildId ? data.guilds[player.guildId]?.name : null;
-    const msgData = { from: socket.nickname, guild: guildName, text: msg, time: Date.now() };
-    io.emit('chatMessage', msgData); 
+    io.emit('chatMessage', { from: socket.nickname, guild: guildName, text: msg, time: Date.now() }); 
   });
 
-  // Профиль
   socket.on('getProfile', (nickname) => {
     const p = data.players[nickname];
     if (!p) return;
     const guild = p.guildId ? data.guilds[p.guildId] : null;
     socket.emit('profileData', { 
-      nickname: p.nickname, level: p.level, guild: guild ? guild.name : 'Нет', playerClass: p.playerClass,
+      nickname: p.nickname, level: p.level, guild: guild ? guild.name : 'Нет', playerClass: p.playerClass || 'Не выбран',
       buildings: p.buildings, credits: p.credits, shards: p.shards, incomeLevel: p.incomeLevel 
     });
   });
 
-  // Постройки и доход
   socket.on('upgradeBuilding', (buildingId) => {
     const player = data.players[socket.nickname];
     if (!player || !player.buildings[buildingId]) return;
@@ -104,7 +111,7 @@ io.on('connection', (socket) => {
     if (b.upgrading) return;
 
     const cost = b.level * 100, energyCost = b.level * 10;
-    if (player.credits < cost || player.energy < energyCost) return socket.emit('error', 'Не хватает ресурсов');
+    if (player.credits < cost || player.energy < energyCost) return socket.emit('error', 'Не хватает ресурсов!');
 
     player.credits -= cost; player.energy -= energyCost;
     b.upgrading = true; b.upgradeEnd = Date.now() + 30000;
@@ -114,7 +121,7 @@ io.on('connection', (socket) => {
   socket.on('upgradeIncome', () => {
     const player = data.players[socket.nickname];
     const cost = player.incomeLevel * 500;
-    if (player.credits < cost) return socket.emit('error', 'Не хватает кредитов');
+    if (player.credits < cost) return socket.emit('error', 'Не хватает кредитов!');
     player.credits -= cost; player.incomeLevel += 1;
     saveData(data); socket.emit('incomeUpdated', player.incomeLevel);
   });
@@ -129,18 +136,15 @@ io.on('connection', (socket) => {
     if (itemId === 'energy') player.energy = Math.min(player.maxEnergy, player.energy + 50);
     if (itemId === 'credits') player.credits += 1000;
     if (itemId === 'instantBuild') {
-      for (let id in player.buildings) {
-        if (player.buildings[id].upgrading) player.buildings[id].upgradeEnd = Date.now();
-      }
+      for (let id in player.buildings) if (player.buildings[id].upgrading) player.buildings[id].upgradeEnd = Date.now();
     }
     saveData(data);
     socket.emit('shopSuccess', { itemId, newShards: player.shards, newCredits: player.credits, newEnergy: player.energy });
   });
 
-  // Гильдии (упрощенно для стабильности)
   socket.on('createGuild', (guildName) => {
     const player = data.players[socket.nickname];
-    if (!player || player.credits < 500) return socket.emit('error', 'Нужно 500 кредитов');
+    if (!player || player.credits < 500) return socket.emit('error', 'Нужно 500 кредитов!');
     if (player.guildId) return socket.emit('error', 'Вы уже в гильдии');
     
     const guildId = 'g_' + Date.now();
@@ -150,7 +154,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Доход и кристаллы
 setInterval(() => {
   let changed = false;
   for (const nick in data.players) {
@@ -159,15 +162,10 @@ setInterval(() => {
     const elapsed = (now - p.lastIncome) / 1000;
     
     if (elapsed >= 1) {
-      const incomeRate = 1 + (p.incomeLevel - 1) * 0.5;
-      p.credits += Math.floor(elapsed * incomeRate);
+      p.credits += Math.floor(elapsed * (1 + (p.incomeLevel - 1) * 0.5));
       p.lastIncome = now;
       changed = true;
-      
-      if (Math.random() < 0.015) { // 1.5% шанс
-        p.shards += 1;
-        io.to(nick).emit('shardFound');
-      }
+      if (Math.random() < 0.015) { p.shards += 1; io.to(nick).emit('shardFound'); }
     }
     for (const bid in p.buildings) {
       const b = p.buildings[bid];
