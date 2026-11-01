@@ -1,12 +1,13 @@
-FROM node:18-alpine
+FROM node:18-slim
 
 WORKDIR /app
 
-# Устанавливаем зависимости
+# Устанавливаем openssl для работы Prisma на Debian
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci --production
 
-# Копируем проект
 COPY . .
 
 # Генерируем Prisma Client
@@ -15,5 +16,5 @@ RUN npx prisma generate
 ENV PORT=8080
 EXPOSE 8080
 
-# При старте создаём базу и запускаем сервер (от root, чтобы точно были права на /data)
-CMD ["sh", "-c", "npx prisma db push && node server.js"]
+# Запускаем создание базы и сервер
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node server.js"]
