@@ -10,17 +10,17 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 const PORT = process.env.PORT || 3000;
 
-// ПУТЬ К БАЗЕ ДАННЫХ (используем /data для Fly.io Volume)
+// Используем /data для Fly.io Volume
 const DATA_DIR = process.env.NODE_ENV === 'production' ? '/data' : __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'database.json');
 
-// Создаем папку /data, если ее нет
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function loadData() {
   try { 
     const d = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); 
     if (!d.chatHistory) d.chatHistory = [];
+    if (!d.idToNick) d.idToNick = {};
     return d;
   } 
   catch { return { players: {}, guilds: {}, idToNick: {}, chatHistory: [] }; }
@@ -28,12 +28,32 @@ function loadData() {
 function saveData(data) { fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2)); }
 
 let data = loadData();
-if (!data.idToNick) data.idToNick = {};
-if (!data.chatHistory) data.chatHistory = [];
-
 app.use(express.static('public'));
 
 function generateId() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
+
+// Безопасное обновление старых игроков
+function migratePlayer(player) {
+  if (!player.id) { player.id = generateId(); data.idToNick[player.id] = player.nickname; }
+  if (!player.friends) player.friends = [];
+  if (!player.friendRequests) player.friendRequests = [];
+  if (!player.guildInvites) player.guildInvites = [];
+  if (player.lastDaily === undefined) player.lastDaily = 0;
+  if (player.lastRoulette === undefined) player.lastRoulette = 0;
+  if (!player.quests) player.quests = { buildOnce: false, chatCount: 0, guildCreated: false, claimed: {} };
+  if (!player.buildings) player.buildings = {};
+  
+  const defaultBuildings = ['house', 'forge', 'shrine', 'datacenter'];
+  defaultBuildings.forEach(b => {
+    if (!player.buildings[b]) {
+      player.buildings[b] = { level: 1, upgrading: false, upgradeEnd: 0, helpReq: false, helped: false };
+    } else {
+      if (player.buildings[b].helpReq === undefined) player.buildings[b].helpReq = false;
+      if (player.buildings[b].helped === undefined) player.buildings[b].helped = false;
+    }
+  });
+  return player;
+}
 
 io.on('connection', (socket) => {
   socket.on('register', (nickname) => {
@@ -43,39 +63,27 @@ io.on('connection', (socket) => {
       let offlineEarnings = 0;
       
       if (!player) {
-        const newId = generateId();
         player = {
-          id: newId, nickname, level: 1, exp: 0, credits: 100, energy: 50, maxEnergy: 50, shards: 0,
+          id: generateId(), nickname, level: 1, credits: 100, energy: 50, maxEnergy: 50, shards: 0,
           incomeLevel: 1, playerClass: null, promoUsed: false, lastRoulette: 0,
           friends: [], friendRequests: [], guildInvites: [], lastDaily: 0,
           quests: { buildOnce: false, chatCount: 0, guildCreated: false, claimed: {} },
-          buildings: {
-            house: { level: 1, upgrading: false, upgradeEnd: 0, helpReq: false, helped: false },
-            forge: { level: 1, upgrading: false, upgradeEnd: 0, helpReq: false, helped: false },
-            shrine: { level: 1, upgrading: false, upgradeEnd: 0, helpReq: false, helped: false },
-            datacenter: { level: 1, upgrading: false, upgradeEnd: 0, helpReq: false, helped: false }
-          },
-          guildId: null, guildRole: null, lastIncome: Date.now()
+          buildings: {}, guildId: null, guildRole: null, lastIncome: Date.now()
         };
         data.players[nickname] = player;
-        data.idToNick[newId] = nickname;
+        data.idToNick[player.id] = nickname;
+        migratePlayer(player);
         saveData(data);
       } else {
         const now = Date.now();
         const elapsedSec = (now - player.lastIncome) / 1000;
         if (elapsedSec > 60) {
-          const incomeRate = 1 + (player.incomeLevel - 1) * 0.5;
+          const incomeRate = 1 + ((player.incomeLevel || 1) - 1) * 0.5;
           offlineEarnings = Math.floor(Math.min(elapsedSec, 12 * 3600) * incomeRate);
           player.credits += offlineEarnings;
         }
         player.lastIncome = now;
-        
-        if (!player.id) { player.id = generateId(); data.idToNick[player.id] = nickname; }
-        if (player.lastRoulette === undefined) player.lastRoulette = 0;
-        if (!player.buildings) player.buildings = {};
-        for(let b in player.buildings) {
-           if(player.buildings[b].helpReq === undefined) { player.buildings[b].helpReq = false; player.buildings[b].helped = false; }
-        }
+        migratePlayer(player);
         saveData(data);
       }
       
@@ -83,93 +91,88 @@ io.on('connection', (socket) => {
       const guild = player.guildId ? data.guilds[player.guildId] : null;
       socket.emit('registered', { player, guild, offlineEarnings });
       socket.emit('chatHistory', data.chatHistory);
+    } catch (e) { console.error(e); socket.emit('error', 'Ошибка сервера'); }
+  });
+
+  socket.on('setClass', (className) => {
+    try {
+      const player = data.players[socket.nickname];
+      if (!player) return socket.emit('error', 'Ошибка: игрок не найден');
+      if (player.playerClass) return socket.emit('classUpdated', player);
       
+      player.playerClass = className;
+      if (className === 'samurai') player.buildings.forge.level = 2;
+      if (className === 'monk') { player.maxEnergy += 50; player.energy += 50; }
+      if (className === 'merchant') player.credits += 500;
+      
+      saveData(data); 
+      socket.emit('classUpdated', player);
+    } catch (e) { console.error(e); socket.emit('error', 'Ошибка при выборе класса'); }
+  });
+
+  socket.on('requestGuildHelp', (buildingId) => {
+    try {
+      const player = data.players[socket.nickname];
+      if (!player || !player.guildId) return socket.emit('error', 'Вы не в гильдии');
+      const b = player.buildings[buildingId];
+      if (!b || !b.upgrading) return;
+      
+      b.helpReq = true;
+      saveData(data);
+      io.to(player.guildId).emit('guildHelpRequested', { nickname: player.nickname, buildingId });
+      socket.emit('error', 'Запрос на помощь отправлен!');
     } catch (e) { console.error(e); }
   });
 
-  // --- ГИЛЬДИЯ: ПОМОЩЬ ---
-  socket.on('requestGuildHelp', (buildingId) => {
-    const player = data.players[socket.nickname];
-    if (!player || !player.guildId) return socket.emit('error', 'Вы не в гильдии');
-    const b = player.buildings[buildingId];
-    if (!b || !b.upgrading) return;
-    
-    b.helpReq = true;
-    saveData(data);
-    io.to(player.guildId).emit('guildHelpRequested', { nickname: player.nickname, buildingId });
-    socket.emit('error', 'Запрос на помощь отправлен гильдии!');
-  });
-
   socket.on('helpGuildMember', ({ nickname, buildingId }) => {
-    const helper = data.players[socket.nickname];
-    const target = data.players[nickname];
-    if (!target || !target.guildId || target.guildId !== helper.guildId) return;
-    
-    const b = target.buildings[buildingId];
-    if (!b || !b.upgrading || b.helped) return;
+    try {
+      const helper = data.players[socket.nickname];
+      const target = data.players[nickname];
+      if (!target || !target.guildId || target.guildId !== helper.guildId) return;
+      
+      const b = target.buildings[buildingId];
+      if (!b || !b.upgrading || b.helped) return;
 
-    // Уменьшаем время на 50%
-    const remaining = b.upgradeEnd - Date.now();
-    b.upgradeEnd = Date.now() + Math.floor(remaining / 2);
-    b.helped = true;
-    b.helpReq = false;
-    
-    saveData(data);
-    io.to(target.nickname).emit('buildingHelped', { id: buildingId, newEnd: b.upgradeEnd });
-    io.to(helper.guildId).emit('guildHelpFulfilled', { nickname: helper.nickname, target: target.nickname });
-    socket.emit('error', 'Вы помогли союзнику! Время сокращено вдвое.');
+      const remaining = b.upgradeEnd - Date.now();
+      b.upgradeEnd = Date.now() + Math.floor(remaining / 2);
+      b.helped = true;
+      b.helpReq = false;
+      
+      saveData(data);
+      io.to(target.nickname).emit('buildingHelped', { id: buildingId });
+      socket.emit('error', 'Вы помогли союзнику!');
+    } catch (e) { console.error(e); }
   });
 
-  // --- РУЛЕТКА УДАЧИ ---
   socket.on('spinRoulette', () => {
-    const player = data.players[socket.nickname];
-    const now = Date.now();
-    if (now - player.lastRoulette < 60 * 1000) return socket.emit('error', 'Рулетка перезаряжается (1 минута)!');
-    if (player.credits < 200) return socket.emit('error', 'Нужно 200 кредитов для прокрута!');
-    
-    player.credits -= 200;
-    player.lastRoulette = now;
-    
-    const roll = Math.random();
-    let rewardText = '';
-    let rewardType = '';
+    try {
+      const player = data.players[socket.nickname];
+      const now = Date.now();
+      if (now - player.lastRoulette < 60000) return socket.emit('error', 'Рулетка перезаряжается!');
+      if (player.credits < 200) return socket.emit('error', 'Нужно 200 кредитов!');
+      
+      player.credits -= 200;
+      player.lastRoulette = now;
+      
+      const roll = Math.random();
+      let rewardText = '';
+      if (roll < 0.1) { player.shards += 5; rewardText = '5 Осколков! 💎'; }
+      else if (roll < 0.3) { player.energy += 50; rewardText = '50 Энергии! ⚡'; }
+      else if (roll < 0.6) { player.credits += 500; rewardText = '500 Кредитов! 💰'; }
+      else if (roll < 0.9) { player.credits += 100; rewardText = '100 Кредитов 💰'; }
+      else { rewardText = 'Пусто... 😢'; }
 
-    if (roll < 0.1) {
-      player.shards += 5; rewardText = '5 Осколков Сакуры! 💎'; rewardType = 'shards';
-    } else if (roll < 0.3) {
-      player.energy += 50; rewardText = '50 Энергии! ⚡'; rewardType = 'energy';
-    } else if (roll < 0.6) {
-      player.credits += 500; rewardText = '500 Кредитов! 💰'; rewardType = 'credits';
-    } else if (roll < 0.9) {
-      player.credits += 100; rewardText = '100 Кредитов 💰'; rewardType = 'credits_small';
-    } else {
-      rewardText = 'Пусто... 😢'; rewardType = 'nothing';
-    }
-
-    saveData(data);
-    socket.emit('rouletteResult', { rewardText, rewardType, player });
+      saveData(data);
+      socket.emit('rouletteResult', { rewardText, player });
+    } catch (e) { console.error(e); }
   });
 
-  // --- ОСТАЛЬНЫЕ ФУНКЦИИ (ЧАТ, АПГРЕЙД И Т.Д.) ---
-  socket.on('upgradeBuilding', (buildingId) => {
-    const player = data.players[socket.nickname];
-    const b = player.buildings[buildingId];
-    if (b.upgrading) return;
-    const cost = b.level * 100, energyCost = b.level * 10;
-    if (player.credits < cost || player.energy < energyCost) return socket.emit('error', 'Не хватает ресурсов!');
-    player.credits -= cost; player.energy -= energyCost;
-    b.upgrading = true; b.upgradeEnd = Date.now() + 60000; // 60 секунд
-    b.helpReq = false; b.helped = false;
-    player.quests.buildOnce = true;
-    saveData(data); socket.emit('buildingUpdated', { id: buildingId, building: b });
-  });
-
+  // Безопасные обработчики
   socket.on('chatMessage', (msg) => {
     if (!socket.nickname || !msg.trim()) return;
     const player = data.players[socket.nickname];
     if(!player) return;
     player.quests.chatCount += 1;
-    
     const msgData = { from: socket.nickname, text: msg, time: Date.now() };
     data.chatHistory.push(msgData);
     if (data.chatHistory.length > 50) data.chatHistory.shift();
@@ -182,7 +185,6 @@ io.on('connection', (socket) => {
     if (player) socket.emit('playerSync', player);
   });
 
-  // (Дальше идут обработчики Гильдии, Друзей, Профиля, Магазина - они остаются прежними)
   socket.on('getAllGuilds', () => {
     const list = Object.values(data.guilds).map(g => ({ id: g.id, name: g.name, leader: g.leader, members: Object.keys(g.members).length }));
     socket.emit('allGuildsList', list);
@@ -190,7 +192,7 @@ io.on('connection', (socket) => {
 
   socket.on('requestJoinGuild', (guildId) => {
     const player = data.players[socket.nickname]; const guild = data.guilds[guildId];
-    if (!guild || player.guildId) return;
+    if (!guild || player.guildId) return socket.emit('error', 'Вы уже в гильдии');
     if (!guild.requests) guild.requests = [];
     if (!guild.requests.includes(player.nickname)) {
       guild.requests.push(player.nickname); saveData(data);
@@ -296,6 +298,19 @@ io.on('connection', (socket) => {
     if (itemId === 'credits') player.credits += 1000;
     if (itemId === 'instantBuild') for (let id in player.buildings) if (player.buildings[id].upgrading) player.buildings[id].upgradeEnd = Date.now();
     saveData(data); socket.emit('shopSuccess');
+  });
+
+  socket.on('upgradeBuilding', (buildingId) => {
+    const player = data.players[socket.nickname];
+    const b = player.buildings[buildingId];
+    if (b.upgrading) return;
+    const cost = b.level * 100, energyCost = b.level * 10;
+    if (player.credits < cost || player.energy < energyCost) return socket.emit('error', 'Не хватает ресурсов!');
+    player.credits -= cost; player.energy -= energyCost;
+    b.upgrading = true; b.upgradeEnd = Date.now() + 60000;
+    b.helpReq = false; b.helped = false;
+    player.quests.buildOnce = true;
+    saveData(data); socket.emit('buildingUpdated', { id: buildingId, building: b });
   });
 
   socket.on('claimQuest', (questId) => {

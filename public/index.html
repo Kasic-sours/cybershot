@@ -18,7 +18,8 @@
     .btn { background: linear-gradient(135deg, #5a2a6a, #3a1a4a); border: 1px solid #7a4a8a; color: #fff; padding: 14px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; margin-top: auto; }
     input { background: #12122a; border: 1px solid #3a3a5a; padding: 14px; border-radius: 12px; color: #fff; font-size: 16px; text-align: center; width: 100%; outline: none; }
     .class-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
-    .class-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 16px; cursor: pointer; }
+    .class-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 16px; cursor: pointer; transition: 0.2s; }
+    .class-card:hover { border-color: #5a2a6a; }
     .class-card h3 { color: #4ade80; font-size: 18px; margin-bottom: 4px; }
     .class-card p { font-size: 13px; margin: 0; color: #aaa; }
     #screen-game { display: none; flex-direction: column; height: 100vh; height: 100dvh; z-index: 1; background: #0a0a12; }
@@ -68,8 +69,6 @@
     .btn-claim:disabled { background: #2a2a4a; color: #666; cursor: not-allowed; }
     .list-item { background: #1a1a3a; padding: 10px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
     .btn-action { background: #4ade80; color: #000; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-    
-    /* Стили для рулетки */
     .roulette-btn { background: linear-gradient(135deg, #f0a0c0, #a04040); color: #fff; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; cursor: pointer; margin-bottom: 15px; border: 2px solid #fff; }
   </style>
 </head>
@@ -78,13 +77,14 @@
   <div id="screen-loading" class="screen active"><h1>НЭО-ЭДО</h1><div class="spinner"></div></div>
   <div id="screen-login" class="screen"><div class="content-box"><h1>Пепел Сакуры</h1><input type="text" id="nick-input" placeholder="Ваш никнейм" maxlength="16" autocomplete="off"><button class="btn" id="btn-login" style="margin-top:20px;">Подключиться</button></div></div>
   <div id="screen-lore" class="screen"><div class="content-box"><h1>Год 2142</h1><p>Империя пала. Неоновые вывески корпораций заменили солнечный свет. Клан «Пепел Сакуры» — последний оплот свободы.</p><button class="btn" id="btn-to-classes">Принять судьбу</button></div></div>
+  
   <div id="screen-classes" class="screen">
     <div class="content-box">
       <h1 style="margin-bottom:10px;">Выберите путь</h1>
       <div class="class-grid">
-        <div class="class-card" onclick="selectClass('samurai')"><h3>⚔️ Кибер-Самурай</h3><p>Начинает с Кузницей 2 ур.</p></div>
-        <div class="class-card" onclick="selectClass('monk')"><h3>⛩️ Техно-Монах</h3><p>+50 к макс. энергии.</p></div>
-        <div class="class-card" onclick="selectClass('merchant')"><h3>💼 Торговец</h3><p>+500 кредитов.</p></div>
+        <div class="class-card" onclick="selectClass('samurai', this)"><h3>⚔️ Кибер-Самурай</h3><p>Начинает с Кузницей 2 ур.</p></div>
+        <div class="class-card" onclick="selectClass('monk', this)"><h3>⛩️ Техно-Монах</h3><p>+50 к макс. энергии.</p></div>
+        <div class="class-card" onclick="selectClass('merchant', this)"><h3>💼 Торговец</h3><p>+500 кредитов.</p></div>
       </div>
     </div>
   </div>
@@ -106,14 +106,11 @@
         <div class="roulette-btn" onclick="spinRoulette()">🎰 Рулетка удачи (200💰)</div>
         <div id="buildings-list"></div>
       </div>
-      
       <div id="tab-chat" class="tab-content">
         <div id="chat-messages"></div>
         <div class="chat-input-row"><input type="text" id="chat-input" placeholder="Сообщение..." maxlength="100"><button id="chat-send">➤</button></div>
       </div>
-
       <div id="tab-quests" class="tab-content"><h3 style="color:#f0a0c0; margin-bottom:10px;">Задания</h3><div id="quests-list"></div></div>
-      
       <div id="tab-friends" class="tab-content">
         <h3 style="color:#f0a0c0; margin-bottom:10px;">Друзья</h3>
         <div style="display:flex; gap:8px; margin-bottom:15px;">
@@ -124,10 +121,8 @@
         <h4 style="color:#fff; margin-bottom:5px;">Мои друзья:</h4><div id="friends-list"></div>
         <h4 style="color:#fff; margin-bottom:5px; margin-top:15px;">Приглашения в гильдию:</h4><div id="guild-invites-list"></div>
       </div>
-
       <div id="tab-guild" class="tab-content">
         <h3 style="color:#f0a0c0; margin-bottom:10px;">Гильдия</h3>
-        
         <div id="guild-main-view">
           <div id="guild-info" style="margin-bottom:10px; font-size:14px; color:#aaa;">Вы не в гильдии</div>
           <div id="guild-create-form" style="margin-bottom:20px;">
@@ -137,15 +132,12 @@
           <h4 style="color:#fff; margin-bottom:10px;">Топ гильдий:</h4>
           <div id="all-guilds-list"></div>
         </div>
-
         <div id="guild-member-view" style="display:none;">
           <div id="guild-info-active" style="margin-bottom:10px; font-size:14px; color:#4ade80; font-weight:bold;"></div>
-          
           <div id="guild-help-section" style="display:none; margin-bottom:15px; background:#1a2a1a; border:1px solid #4ade80; padding:10px; border-radius:8px;">
             <h4 style="color:#4ade80; margin-bottom:5px;">Запросы помощи:</h4>
             <div id="guild-help-list"></div>
           </div>
-
           <div id="guild-invite-form" style="display:none; margin-bottom:15px; background:#1a1a3a; padding:10px; border-radius:8px;">
             <p style="font-size:12px; margin-bottom:5px;">Пригласить по ID:</p>
             <div style="display:flex; gap:8px;">
@@ -153,12 +145,10 @@
               <button class="btn-upg" onclick="inviteToGuild()" style="padding:8px;">Пригласить</button>
             </div>
           </div>
-          
           <div id="leader-requests-section" style="display:none; margin-bottom:15px;">
             <h4 style="color:#f0a0c0; margin-bottom:5px;">Заявки на вступление:</h4>
             <div id="leader-requests-list"></div>
           </div>
-
           <h4 style="color:#fff; margin-bottom:5px;">Участники:</h4>
           <div id="guild-members-list"></div>
         </div>
@@ -174,7 +164,6 @@
     </div>
   </div>
 
-  <!-- Модалки -->
   <div id="modal-profile" class="modal">
     <div class="modal-box">
       <button class="close-btn" onclick="closeModal('modal-profile')">×</button>
@@ -253,8 +242,17 @@
     });
 
     document.getElementById('btn-to-classes').onclick = () => showScreen('screen-classes');
-    window.selectClass = (cls) => socket.emit('setClass', cls);
-    socket.on('classUpdated', (player) => { myPlayer = player; startGame(); });
+    
+    // ЗАЩИТА ОТ ЗАВИСАНИЯ ПРИ ВЫБОРЕ КЛАССА
+    window.selectClass = (cls, el) => {
+      if (el) el.innerHTML = '<h3 style="color:#fff; text-align:center;">Загрузка...</h3><p style="text-align:center;">Ожидание сервера</p>';
+      socket.emit('setClass', cls);
+    };
+    
+    socket.on('classUpdated', (player) => { 
+      myPlayer = player; 
+      startGame(); 
+    });
 
     function startGame() {
       showScreen('screen-game'); socket.emit('setOnline', myNickname);
@@ -283,7 +281,6 @@
       if (tabName === 'guild') { socket.emit('getAllGuilds'); socket.emit('getLeaderRequests'); }
     };
 
-    // --- РУЛЕТКА ---
     window.spinRoulette = () => {
       document.getElementById('modal-roulette').classList.add('active');
       document.getElementById('roulette-anim').textContent = '🎲';
@@ -295,10 +292,9 @@
       setTimeout(() => {
         document.getElementById('roulette-anim').textContent = data.rewardText;
         document.getElementById('roulette-close-btn').style.display = 'block';
-      }, 1000); // Имитация кручения
+      }, 1000);
     });
 
-    // --- ПОСТРОЙКИ ---
     const BUILDING_NAMES = { house: '🏠 Дом', forge: '🔨 Кузница', shrine: '⛩️ Святилище', datacenter: '🖥️ Дата-центр' };
     function initBuildingsDOM() {
       const container = document.getElementById('buildings-list');
@@ -345,12 +341,9 @@
       showToast('Союзник помог вам! Время сокращено вдвое.', 'success');
     });
 
-    // --- ГИЛЬДИЯ: ПОМОЩЬ ---
     socket.on('guildHelpRequested', (data) => {
       if (data.nickname !== myNickname) {
-        // Показываем уведомление всем в гильдии
         showToast(`${data.nickname} просит помощи в строительстве!`, 'info');
-        // В реальном коде мы бы обновляли UI вкладки гильдии
         document.getElementById('guild-help-section').style.display = 'block';
         const list = document.getElementById('guild-help-list');
         list.innerHTML += `<div class="list-item"><span>${data.nickname} (${BUILDING_NAMES[data.buildingId]})</span><button class="btn-action" onclick="helpMember('${data.nickname}', '${data.buildingId}')">Помочь</button></div>`;
@@ -359,10 +352,9 @@
 
     window.helpMember = (nick, bid) => {
       socket.emit('helpGuildMember', { nickname: nick, buildingId: bid });
-      document.getElementById('guild-help-list').innerHTML = ''; // Очищаем после помощи
+      document.getElementById('guild-help-list').innerHTML = ''; 
     };
 
-    // --- ОСТАЛЬНОЕ (КВЕСТЫ, ЧАТ, ГИЛЬДИЯ) ---
     socket.on('chatHistory', (history) => { document.getElementById('chat-messages').innerHTML = ''; history.forEach(addChatMessage); });
     socket.on('chatMessage', addChatMessage);
     function addChatMessage(msg) {
@@ -417,7 +409,6 @@
       document.getElementById('guild-member-view').style.display = 'block';
       document.getElementById('guild-info-active').textContent = `Гильдия: ${guild.name}`;
       
-      // Если лидер - показываем доп кнопки
       if (myPlayer && guild.members[myPlayer.nickname] === 'leader') {
         document.getElementById('guild-invite-form').style.display = 'block';
         document.getElementById('leader-requests-section').style.display = 'block';
@@ -428,10 +419,7 @@
       for (const nick in guild.members) html += `<div class="list-item" onclick="openProfile('${nick}')"><span>${nick}</span><span>${guild.members[nick]}</span></div>`;
       document.getElementById('guild-members-list').innerHTML = html;
       
-      // Если кто-то просит помощи
-      if (guild.requests && guild.requests.length > 0) {
-          document.getElementById('guild-help-section').style.display = 'block';
-      }
+      if (guild.requests && guild.requests.length > 0) document.getElementById('guild-help-section').style.display = 'block';
     });
 
     socket.on('leaderRequestsList', (requests) => {
@@ -443,7 +431,6 @@
     socket.on('guildRequestReceived', (data) => { if (myNickname === data.leader) { socket.emit('getLeaderRequests'); showToast('Новая заявка в гильдию!', 'info'); } });
     socket.on('guildMemberJoined', (data) => { if (myPlayer && myPlayer.guildId === data.guildId) socket.emit('getMyGuild'); });
     
-    // Друзья/Профиль
     window.addFriend = () => { const id = document.getElementById('friend-id-input').value.trim().toUpperCase(); if (id) socket.emit('addFriend', id); };
     window.acceptFriend = (id) => socket.emit('acceptFriend', id);
     socket.on('friendsData', (data) => {
@@ -459,6 +446,7 @@
     });
     socket.on('friendRequestReceived', (nickname) => { if (nickname === myNickname) { socket.emit('getFriends'); showToast('Новая заявка!', 'info'); } });
     socket.on('guildInviteReceived', (nickname) => { if (nickname === myNickname) { socket.emit('getFriends'); showToast('Приглашение в гильдию!', 'info'); } });
+    
     window.openProfile = (nick) => socket.emit('getProfile', nick);
     socket.on('profileData', (p) => {
       document.getElementById('profile-title').textContent = p.nickname;
