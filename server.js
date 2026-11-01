@@ -1,398 +1,412 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const fs = require('fs');
-const path = require('path');
+const { PrismaClient } = require('@prisma/client');
+const { v4: uuidv4 } = require('uuid');
 
+const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
+app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 
-// ЛОКАЛЬНО БАЗА ЛЕЖИТ РЯДОМ, НА FLY - В /data
-const DATA_DIR = process.env.NODE_ENV === 'production' ? '/data' : __dirname;
-const DATA_FILE = path.join(DATA_DIR, 'database.json');
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-function loadData() {
-  try { 
-    const d = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); 
-    if (!d.chatHistory) d.chatHistory = [];
-    if (!d.idToNick) d.idToNick = {};
-    return d;
-  } 
-  catch { return { players: {}, guilds: {}, idToNick: {}, chatHistory: [] }; }
-}
-function saveData(data) { fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2)); }
-
-let data = loadData();
-app.use(express.static('public'));
-
-function generateId() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
-
-function migratePlayer(player) {
-  if (!player.id) { player.id = generateId(); data.idToNick[player.id] = player.nickname; }
-  if (!player.friends) player.friends = [];
-  if (!player.friendRequests) player.friendRequests = [];
-  if (!player.guildInvites) player.guildInvites = [];
-  if (player.lastDaily === undefined) player.lastDaily = 0;
-  if (player.lastRoulette === undefined) player.lastRoulette = 0;
-  if (!player.quests) player.quests = { buildOnce: false, chatCount: 0, guildCreated: false, claimed: {} };
-  if (!player.buildings) player.buildings = {};
-  
-  const defaultBuildings = ['house', 'forge', 'shrine', 'datacenter'];
-  defaultBuildings.forEach(b => {
-    if (!player.buildings[b]) {
-      player.buildings[b] = { level: 1, upgrading: false, upgradeEnd: 0, helpReq: false, helped: false };
-    } else {
-      if (player.buildings[b].helpReq === undefined) player.buildings[b].helpReq = false;
-      if (player.buildings[b].helped === undefined) player.buildings[b].helped = false;
-    }
-  });
-  return player;
-}
-
 io.on('connection', (socket) => {
-  socket.on('register', (nickname) => {
+  let user = null;
+
+  const sendSync = async () => {
+    if (!user) return;
     try {
-      if (!nickname || nickname.length < 2) return socket.emit('error', 'Ник слишком короткий');
-      let player = data.players[nickname];
-      let offlineEarnings = 0;
-      
-      if (!player) {
-        player = {
-          id: generateId(), nickname, level: 1, credits: 100, energy: 50, maxEnergy: 50, shards: 0,
-          incomeLevel: 1, playerClass: null, promoUsed: false, lastRoulette: 0,
-          friends: [], friendRequests: [], guildInvites: [], lastDaily: 0,
-          quests: { buildOnce: false, chatCount: 0, guildCreated: false, claimed: {} },
-          buildings: {}, guildId: null, guildRole: null, lastIncome: Date.now()
-        };
-        data.players[nickname] = player;
-        data.idToNick[player.id] = nickname;
-        migratePlayer(player);
-        saveData(data);
-      } else {
-        const now = Date.now();
-        const elapsedSec = (now - player.lastIncome) / 1000;
-        if (elapsedSec > 60) {
-          const incomeRate = 1 + ((player.incomeLevel || 1) - 1) * 0.5;
-          offlineEarnings = Math.floor(Math.min(elapsedSec, 12 * 3600) * incomeRate);
-          player.credits += offlineEarnings;
-        }
-        player.lastIncome = now;
-        migratePlayer(player);
-        saveData(data);
+      const freshUser = await prisma.user.findUnique({ 
+        where: { id: user.id }, 
+        include: { buildings: true, guild: true, quests: true } 
+      });
+      socket.emit('sync', freshUser);
+    } catch (e) { console.error(e); }
+  };
+
+  // --- АВТОРИЗАЦИЯ ---
+  socket.on('auth', async ({ nickname, token }) => {
+    try {
+      let dbUser;
+      if (token) {
+        dbUser = await prisma.user.findUnique({ 
+          where: { token }, 
+          include: { buildings: true, quests: true, guild: true } 
+        });
       }
       
-      socket.nickname = nickname;
-      if (player.guildId) socket.join(player.guildId); // ВАЖНО: Подключаем к комнате гильдии
+      if (!dbUser) {
+        if (await prisma.user.findUnique({ where: { nickname } })) {
+          return socket.emit('error', 'Этот ник занят. Если это вы, войдите с того же устройства.');
+        }
+        const newToken = uuidv4();
+        dbUser = await prisma.user.create({
+          data: {
+            nickname, token: newToken,
+            buildings: { 
+              create: [
+                { type: 'house' }, { type: 'forge' }, { type: 'shrine' }, { type: 'datacenter' },
+                { type: 'powerplant', level: 1 }, { type: 'factory', level: 1 } // <--- НОВЫЕ ЗДАНИЯ
+              ] 
+            },
+            quests: { create: [{ questKey: 'buildOnce' }, { questKey: 'chatCount' }, { questKey: 'guildCreated' }] }
+          },
+          include: { buildings: true, quests: true, guild: true }
+        });
+        socket.emit('newToken', newToken);
+      }
 
-      const guild = player.guildId ? data.guilds[player.guildId] : null;
-      socket.emit('registered', { player, guild, offlineEarnings });
-      socket.emit('chatHistory', data.chatHistory);
-    } catch (e) { console.error(e); socket.emit('error', 'Ошибка сервера'); }
-  });
-
-  socket.on('setClass', (className) => {
-    try {
-      const player = data.players[socket.nickname];
-      if (!player) return socket.emit('error', 'Ошибка: игрок не найден');
-      if (player.playerClass) return socket.emit('classUpdated', player);
+      user = dbUser;
+      socket.join(user.id);
       
-      player.playerClass = className;
-      if (className === 'samurai') player.buildings.forge.level = 2;
-      if (className === 'monk') { player.maxEnergy += 50; player.energy += 50; }
-      if (className === 'merchant') player.credits += 500;
-      
-      saveData(data); 
-      socket.emit('classUpdated', player);
-    } catch (e) { console.error(e); socket.emit('error', 'Ошибка при выборе класса'); }
-  });
+      const now = new Date();
+      const elapsedSec = (now - user.lastIncome) / 1000;
+      let offline = 0;
+      if (elapsedSec > 60) {
+        offline = Math.floor(Math.min(elapsedSec, 43200) * (1 + (user.incomeLevel - 1) * 0.5));
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { credits: user.credits + offline, lastIncome: now },
+          include: { buildings: true, quests: true, guild: true }
+        });
+      }
 
-  socket.on('requestGuildHelp', (buildingId) => {
-    try {
-      const player = data.players[socket.nickname];
-      if (!player || !player.guildId) return socket.emit('error', 'Вы не в гильдии');
-      const b = player.buildings[buildingId];
-      if (!b || !b.upgrading) return;
+      socket.emit('authSuccess', { user, offline });
       
-      b.helpReq = true;
-      saveData(data);
-      // Отправляем ВСЕМ в комнате гильдии
-      socket.to(player.guildId).emit('guildHelpRequested', { nickname: player.nickname, buildingId });
-      socket.emit('error', 'Запрос на помощь отправлен!');
-    } catch (e) { console.error(e); }
-  });
-
-  socket.on('helpGuildMember', ({ nickname, buildingId }) => {
-    try {
-      const helper = data.players[socket.nickname];
-      const target = data.players[nickname];
-      if (!target || !target.guildId || target.guildId !== helper.guildId) return;
+      const history = await prisma.chatMessage.findMany({ take: 50, orderBy: { createdAt: 'desc' }, include: { user: true } });
+      socket.emit('chatHistory', history.reverse().map(m => ({ from: m.user.nickname, text: m.text })));
       
-      const b = target.buildings[buildingId];
-      if (!b || !b.upgrading || b.helped) return;
-
-      const remaining = b.upgradeEnd - Date.now();
-      b.upgradeEnd = Date.now() + Math.floor(remaining / 2);
-      b.helped = true;
-      b.helpReq = false;
+      const guilds = await prisma.guild.findMany({ include: { members: true } });
+      socket.emit('allGuilds', guilds.map(g => ({ id: g.id, name: g.name, leader: g.leader, members: g.members.length })));
       
-      saveData(data);
-      io.to(target.nickname).emit('buildingHelped', { id: buildingId });
-      socket.emit('error', 'Вы помогли союзнику!');
-    } catch (e) { console.error(e); }
-  });
-
-  // --- УПРАВЛЕНИЕ ГИЛЬДИЕЙ ---
-  socket.on('promoteMember', ({ guildId, nickname }) => {
-    const guild = data.guilds[guildId]; const player = data.players[socket.nickname];
-    if (!guild || !player || player.guildRole !== 'leader') return;
-    
-    const roles = ['private', 'officer', 'general'];
-    const idx = roles.indexOf(guild.members[nickname]);
-    if (idx !== -1 && idx < roles.length - 1) {
-      guild.members[nickname] = roles[idx + 1];
-      saveData(data);
-      io.to(guildId).emit('guildUpdated', guild);
+    } catch (e) { 
+      console.error(e); 
+      socket.emit('error', 'Ошибка входа.'); 
     }
   });
 
-  socket.on('demoteMember', ({ guildId, nickname }) => {
-    const guild = data.guilds[guildId]; const player = data.players[socket.nickname];
-    if (!guild || !player || player.guildRole !== 'leader') return;
-    
-    const roles = ['private', 'officer', 'general'];
-    const idx = roles.indexOf(guild.members[nickname]);
-    if (idx > 0) {
-      guild.members[nickname] = roles[idx - 1];
-      saveData(data);
-      io.to(guildId).emit('guildUpdated', guild);
-    }
-  });
-
-  socket.on('kickMember', ({ guildId, nickname }) => {
-    const guild = data.guilds[guildId]; const player = data.players[socket.nickname];
-    if (!guild || !player || player.guildRole !== 'leader' || nickname === player.nickname) return;
-    
-    delete guild.members[nickname];
-    if (data.players[nickname]) {
-      data.players[nickname].guildId = null;
-      data.players[nickname].guildRole = null;
-    }
-    saveData(data);
-    io.to(guildId).emit('guildUpdated', guild);
-    io.to(nickname).emit('kickedFromGuild');
-  });
-
-  socket.on('spinRoulette', () => {
+  socket.on('getGuilds', async () => {
     try {
-      const player = data.players[socket.nickname];
-      const now = Date.now();
-      if (now - player.lastRoulette < 60000) return socket.emit('error', 'Рулетка перезаряжается!');
-      if (player.credits < 200) return socket.emit('error', 'Нужно 200 кредитов!');
+      const guilds = await prisma.guild.findMany({ include: { members: true } });
+      socket.emit('allGuilds', guilds.map(g => ({ id: g.id, name: g.name, leader: g.leader, members: g.members.length })));
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('setClass', async (cls) => {
+    if (!user) return;
+    try {
+      let upd = { playerClass: cls };
+      if (cls === 'samurai') {
+        const f = await prisma.building.findFirst({ where: { userId: user.id, type: 'forge' } });
+        if (f) await prisma.building.update({ where: { id: f.id }, data: { level: 2 } });
+      }
+      if (cls === 'monk') { upd.maxEnergy = user.maxEnergy + 50; upd.energy = user.energy + 50; }
+      if (cls === 'merchant') upd.credits = user.credits + 500;
       
-      player.credits -= 200;
-      player.lastRoulette = now;
+      user = await prisma.user.update({ 
+        where: { id: user.id }, 
+        data: upd, 
+        include: { buildings: true, quests: true, guild: true } 
+      });
+      socket.emit('classUpdated', user);
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('syncPlayer', sendSync);
+
+  // --- ЗДАНИЯ ---
+  socket.on('upgradeBuilding', async (bid) => {
+    if (!user) return;
+    try {
+      const b = await prisma.building.findFirst({ where: { userId: user.id, type: bid } });
+      if (!b || b.upgrading) return;
       
+      let costCredits = 0, costEnergy = 0, costMetal = 0, costParts = 0;
+
+      // Новая экономика
+      if (bid === 'powerplant') {
+        costCredits = b.level * 500;
+        costMetal = b.level * 10;
+      } else if (bid === 'factory') {
+        costCredits = b.level * 800;
+        costMetal = b.level * 20;
+        costParts = b.level * 5;
+      } else {
+        // Старые здания
+        costCredits = b.level * 100;
+        costEnergy = b.level * 10;
+      }
+
+      if (user.credits < costCredits || user.energy < costEnergy || user.metal < costMetal || user.parts < costParts) {
+        return socket.emit('error', 'Не хватает ресурсов');
+      }
+      
+      await prisma.$transaction([
+        prisma.user.update({ 
+          where: { id: user.id }, 
+          data: { 
+            credits: { decrement: costCredits }, 
+            energy: { decrement: costEnergy },
+            metal: { decrement: costMetal },
+            parts: { decrement: costParts }
+          } 
+        }),
+        prisma.building.update({ where: { id: b.id }, data: { upgrading: true, upgradeEnd: new Date(Date.now() + 30000) } }),
+        prisma.userQuest.updateMany({ where: { userId: user.id, questKey: 'buildOnce' }, data: { isDone: true } })
+      ]);
+      sendSync();
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('upgradeIncome', async () => {
+    if (!user) return;
+    try {
+      const cost = user.incomeLevel * 500;
+      if (user.credits < cost) return socket.emit('error', 'Мало кредитов');
+      
+      user = await prisma.user.update({ 
+        where: { id: user.id }, 
+        data: { credits: { decrement: cost }, incomeLevel: { increment: 1 } }, 
+        include: { buildings: true, quests: true, guild: true } 
+      });
+      socket.emit('sync', user);
+    } catch(e) { console.error(e); }
+  });
+
+  // --- РУЛЕТКА ---
+  socket.on('spinRoulette', async () => {
+    if (!user) return;
+    try {
+      if (user.lastRoulette && Date.now() - new Date(user.lastRoulette).getTime() < 60000) {
+        return socket.emit('error', 'Рулетка перезаряжается');
+      }
+      if (user.credits < 200) return socket.emit('error', 'Нужно 200 кредитов');
+      
+      let text = 'Пусто', upd = { credits: { decrement: 200 }, lastRoulette: new Date() };
       const roll = Math.random();
-      let rewardText = '';
-      if (roll < 0.1) { player.shards += 5; rewardText = '5 Осколков! 💎'; }
-      else if (roll < 0.3) { player.energy += 50; rewardText = '50 Энергии! ⚡'; }
-      else if (roll < 0.6) { player.credits += 500; rewardText = '500 Кредитов! 💰'; }
-      else if (roll < 0.9) { player.credits += 100; rewardText = '100 Кредитов 💰'; }
-      else { rewardText = 'Пусто... 😢'; }
-
-      saveData(data);
-      socket.emit('rouletteResult', { rewardText, player });
-    } catch (e) { console.error(e); }
+      if (roll < 0.1) { upd.shards = { increment: 5 }; text = '5 Осколков!'; }
+      else if (roll < 0.3) { upd.energy = { increment: 50 }; text = '50 Энергии!'; }
+      else if (roll < 0.9) { upd.credits.increment = 500; text = '500 Кредитов!'; }
+      
+      user = await prisma.user.update({ 
+        where: { id: user.id }, 
+        data: upd, 
+        include: { buildings: true, quests: true, guild: true } 
+      });
+      socket.emit('rouletteResult', { text });
+      socket.emit('sync', user);
+    } catch(e) { console.error(e); }
   });
 
-  // --- ОСТАЛЬНОЕ ---
-  socket.on('chatMessage', (msg) => {
-    if (!socket.nickname || !msg.trim()) return;
-    const player = data.players[socket.nickname];
-    if(!player) return;
-    player.quests.chatCount += 1;
-    const msgData = { from: socket.nickname, text: msg, time: Date.now() };
-    data.chatHistory.push(msgData);
-    if (data.chatHistory.length > 50) data.chatHistory.shift();
-    saveData(data);
-    io.emit('chatMessage', msgData);
+  // --- ЧАТ ---
+  socket.on('chatMessage', async (msg) => {
+    if (!user || !msg.trim()) return;
+    try {
+      await prisma.chatMessage.create({ data: { text: msg, userId: user.id } });
+      await prisma.userQuest.updateMany({ where: { userId: user.id, questKey: 'chatCount' }, data: { isDone: true } });
+      io.emit('chatMessage', { from: user.nickname, text: msg });
+    } catch(e) { console.error(e); }
   });
 
-  socket.on('syncPlayer', () => {
-    const player = data.players[socket.nickname];
-    if (player) socket.emit('playerSync', player);
+  // --- МАГАЗИН ---
+  socket.on('buyItem', async (item) => {
+    if (!user) return;
+    try {
+      const prices = { energy: 5, credits: 10, instantBuild: 15 };
+      if (user.shards < prices[item]) return socket.emit('error', 'Мало осколков');
+      
+      let upd = { shards: { decrement: prices[item] } };
+      if (item === 'energy') upd.energy = { increment: 50 };
+      if (item === 'credits') upd.credits = { increment: 1000 };
+      if (item === 'instantBuild') {
+        await prisma.building.updateMany({ where: { userId: user.id, upgrading: true }, data: { upgradeEnd: new Date() } });
+      }
+      
+      user = await prisma.user.update({ 
+        where: { id: user.id }, 
+        data: upd, 
+        include: { buildings: true, quests: true, guild: true } 
+      });
+      socket.emit('sync', user);
+    } catch(e) { console.error(e); }
   });
 
-  socket.on('getAllGuilds', () => {
-    const list = Object.values(data.guilds).map(g => ({ id: g.id, name: g.name, leader: g.leader, members: Object.keys(g.members).length }));
-    socket.emit('allGuildsList', list);
+  // --- КВЕСТЫ И ПРОМО ---
+  socket.on('claimQuest', async (qKey) => {
+    if (!user) return;
+    try {
+      await prisma.userQuest.updateMany({ where: { userId: user.id, questKey: qKey }, data: { isClaimed: true } });
+      let reward = qKey === 'buildOnce' ? 500 : qKey === 'chatCount' ? 5 : 2000;
+      
+      if (qKey === 'chatCount') {
+        user = await prisma.user.update({ where: { id: user.id }, data: { shards: { increment: reward } }, include: { buildings: true, quests: true, guild: true } });
+      } else {
+        user = await prisma.user.update({ where: { id: user.id }, data: { credits: { increment: reward } }, include: { buildings: true, quests: true, guild: true } });
+      }
+      socket.emit('sync', user);
+    } catch(e) { console.error(e); }
   });
 
-  socket.on('requestJoinGuild', (guildId) => {
-    const player = data.players[socket.nickname]; const guild = data.guilds[guildId];
-    if (!guild || player.guildId) return socket.emit('error', 'Вы уже в гильдии');
-    if (!guild.requests) guild.requests = [];
-    if (!guild.requests.includes(player.nickname)) {
-      guild.requests.push(player.nickname); saveData(data);
-      socket.emit('error', 'Заявка отправлена!');
-      io.emit('guildRequestReceived', { leader: guild.leader, guildId });
+  socket.on('redeemPromo', async (code) => {
+    if (!user) return;
+    try {
+      if (code !== 'TEST100') return socket.emit('error', 'Неверный код');
+      if (user.promoUsed) return socket.emit('error', 'Уже использован');
+      
+      user = await prisma.user.update({ 
+        where: { id: user.id }, 
+        data: { promoUsed: true, shards: { increment: 100 } }, 
+        include: { buildings: true, quests: true, guild: true } 
+      });
+      socket.emit('success', 'Промокод активирован!');
+      socket.emit('sync', user);
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('claimDaily', async () => {
+    if (!user) return;
+    try {
+      if (user.lastDaily && Date.now() - new Date(user.lastDaily).getTime() < 86400000) {
+        return socket.emit('error', 'Награда еще не готова');
+      }
+      user = await prisma.user.update({ 
+        where: { id: user.id }, 
+        data: { lastDaily: new Date(), shards: { increment: 50 }, credits: { increment: 1000 } }, 
+        include: { buildings: true, quests: true, guild: true } 
+      });
+      socket.emit('success', 'Ежедневная награда получена!');
+      socket.emit('sync', user);
+    } catch(e) { console.error(e); }
+  });
+
+  // --- ГИЛЬДИИ ---
+  socket.on('createGuild', async (name) => {
+    if (!user) return;
+    try {
+      if (user.credits < 500) return socket.emit('error', 'Нужно 500 кредитов');
+      if (user.guildId) return socket.emit('error', 'Вы уже в гильдии');
+      
+      const existing = await prisma.guild.findUnique({ where: { name } });
+      if (existing) return socket.emit('error', 'Это имя уже занято');
+
+      const guild = await prisma.guild.create({ data: { name, leader: user.nickname } });
+      
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { credits: { decrement: 500 }, guildId: guild.id, guildRole: 'leader' },
+        include: { buildings: true, quests: true, guild: true }
+      });
+      
+      await prisma.userQuest.updateMany({ where: { userId: user.id, questKey: 'guildCreated' }, data: { isDone: true } });
+      
+      socket.emit('success', 'Гильдия создана!');
+      socket.emit('sync', user);
+      
+      const guilds = await prisma.guild.findMany({ include: { members: true } });
+      io.emit('allGuilds', guilds.map(g => ({ id: g.id, name: g.name, leader: g.leader, members: g.members.length })));
+    } catch (e) {
+      console.error(e);
+      socket.emit('error', 'Ошибка при создании гильдии');
     }
   });
 
-  socket.on('acceptJoinRequest', ({ guildId, nickname }) => {
-    const guild = data.guilds[guildId], player = data.players[nickname], leader = data.players[socket.nickname];
-    if (!guild || !player || leader.guildRole !== 'leader') return;
-    guild.requests = guild.requests.filter(n => n !== nickname);
-    player.guildId = guildId; player.guildRole = 'private'; guild.members[nickname] = 'private';
-    saveData(data); 
-    socket.join(guildId); // Новый участник подключается к комнате
-    io.to(guildId).emit('guildUpdated', guild); 
-    io.emit('guildMemberJoined', { guildId, nickname });
+  socket.on('requestJoinGuild', async (guildId) => {
+    if (!user || user.guildId) return;
+    try {
+      const guild = await prisma.guild.findUnique({ where: { id: guildId } });
+      if (!guild) return;
+      
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { guildId: guild.id, guildRole: 'private' },
+        include: { buildings: true, quests: true, guild: true }
+      });
+      socket.emit('success', `Вы вступили в гильдию ${guild.name}!`);
+      socket.emit('sync', user);
+      
+      const guilds = await prisma.guild.findMany({ include: { members: true } });
+      io.emit('allGuilds', guilds.map(g => ({ id: g.id, name: g.name, leader: g.leader, members: g.members.length })));
+    } catch(e) { console.error(e); }
   });
 
-  socket.on('getLeaderRequests', () => {
-    const player = data.players[socket.nickname]; if (!player || !player.guildId || player.guildRole !== 'leader') return;
-    const guild = data.guilds[player.guildId]; if (guild) socket.emit('leaderRequestsList', guild.requests || []);
+  // --- ТОРГОВЛЯ ---
+  socket.on('createTrade', async (data) => {
+    if (!user) return;
+    try {
+      if (data.amount <= 0 || data.price <= 0) return socket.emit('error', 'Неверные данные');
+      if (user.credits < data.amount) return socket.emit('error', 'Мало кредитов');
+      
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { credits: { decrement: data.amount } } }),
+        prisma.tradeOffer.create({ data: { sellerId: user.id, resource: 'credits', amount: data.amount, price: data.price } })
+      ]);
+      socket.emit('success', 'Ордер создан');
+      sendSync();
+    } catch(e) { console.error(e); }
   });
 
-  socket.on('getMyGuild', () => {
-    const player = data.players[socket.nickname];
-    if (player && player.guildId && data.guilds[player.guildId]) socket.emit('guildUpdated', data.guilds[player.guildId]);
+  socket.on('getTrades', async () => {
+    try {
+      const offers = await prisma.tradeOffer.findMany({ include: { seller: true } });
+      socket.emit('tradesList', offers);
+    } catch(e) { console.error(e); }
   });
 
-  socket.on('createGuild', (guildName) => {
-    const player = data.players[socket.nickname];
-    if (!player || player.credits < 500 || player.guildId) return socket.emit('error', 'Ошибка создания');
-    const guildId = 'g_' + Date.now();
-    data.guilds[guildId] = { id: guildId, name: guildName, leader: socket.nickname, members: { [socket.nickname]: 'leader' }, requests: [] };
-    player.credits -= 500; player.guildId = guildId; player.guildRole = 'leader'; player.quests.guildCreated = true;
-    saveData(data); 
-    socket.join(guildId);
-    socket.emit('guildUpdated', data.guilds[guildId]);
+  socket.on('buyTrade', async (offerId) => {
+    if (!user) return;
+    try {
+      const offer = await prisma.tradeOffer.findUnique({ where: { id: offerId }, include: { seller: true } });
+      if (!offer || offer.sellerId === user.id) return socket.emit('error', 'Недоступно');
+      if (user.credits < offer.price) return socket.emit('error', 'Мало кредитов');
+
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { credits: { decrement: offer.price } } }),
+        prisma.user.update({ where: { id: offer.sellerId }, data: { credits: { increment: offer.price } } }),
+        prisma.tradeOffer.delete({ where: { id: offer.id } })
+      ]);
+      socket.emit('success', 'Куплено!');
+      sendSync();
+    } catch(e) { console.error(e); }
   });
 
-  socket.on('inviteToGuild', (targetId) => {
-    const player = data.players[socket.nickname];
-    if (!player.guildId || player.guildRole !== 'leader') return socket.emit('error', 'Вы не лидер');
-    const targetNick = data.idToNick[targetId]; if (!targetNick) return socket.emit('error', 'Игрок не найден');
-    const target = data.players[targetNick];
-    if (target.guildId) return socket.emit('error', 'Игрок уже в гильдии');
-    if (!target.guildInvites.includes(player.guildId)) {
-      target.guildInvites.push(player.guildId); saveData(data);
-      io.emit('guildInviteReceived', targetNick); socket.emit('error', 'Приглашение отправлено!');
-    }
-  });
-
-  socket.on('acceptGuildInvite', (guildId) => {
-    const player = data.players[socket.nickname]; const guild = data.guilds[guildId]; if (!guild) return;
-    player.guildInvites = player.guildInvites.filter(id => id !== guildId);
-    player.guildId = guildId; player.guildRole = 'private'; guild.members[player.nickname] = 'private';
-    saveData(data); 
-    socket.join(guildId);
-    io.to(guildId).emit('guildUpdated', guild); 
-    io.emit('guildMemberJoined', { guildId, nickname: player.nickname });
-  });
-
-  socket.on('getProfile', (nickname) => {
-    const p = data.players[nickname]; if (!p) return;
-    const guild = p.guildId ? data.guilds[p.guildId] : null;
-    socket.emit('profileData', { nickname: p.nickname, id: p.id, level: p.level, guild: guild ? guild.name : 'Нет', playerClass: p.playerClass || 'Не выбран', credits: p.credits, shards: p.shards, promoUsed: p.promoUsed, lastDaily: p.lastDaily });
-  });
-
-  socket.on('addFriend', (targetId) => {
-    const player = data.players[socket.nickname]; if (targetId === player.id) return socket.emit('error', 'Это ваш ID');
-    const targetNick = data.idToNick[targetId]; if (!targetNick) return socket.emit('error', 'Игрок не найден');
-    const target = data.players[targetNick];
-    if (!target.friendRequests.includes(player.id)) { target.friendRequests.push(player.id); saveData(data); io.emit('friendRequestReceived', targetNick); }
-    socket.emit('error', 'Запрос отправлен!');
-  });
-
-  socket.on('acceptFriend', (senderId) => {
-    const player = data.players[socket.nickname]; const senderNick = data.idToNick[senderId]; if (!senderNick) return;
-    const sender = data.players[senderNick];
-    player.friendRequests = player.friendRequests.filter(id => id !== senderId);
-    if (!player.friends.includes(senderId)) player.friends.push(senderId);
-    if (!sender.friends.includes(player.id)) sender.friends.push(player.id);
-    saveData(data); socket.emit('friendsUpdated'); io.emit('friendRequestReceived', senderNick);
-  });
-
-  socket.on('getFriends', () => {
-    const player = data.players[socket.nickname]; if(!player) return;
-    socket.emit('friendsData', { friends: player.friends.map(id => ({ id, nickname: data.idToNick[id] })), requests: player.friendRequests.map(id => ({ id, nickname: data.idToNick[id] })), invites: player.guildInvites.map(gid => ({ id: gid, name: data.guilds[gid]?.name })) });
-  });
-
-  socket.on('claimDaily', () => {
-    const player = data.players[socket.nickname]; if (Date.now() - player.lastDaily < 24 * 3600 * 1000) return socket.emit('error', 'Не готово');
-    player.lastDaily = Date.now(); player.shards += 50; player.credits += 1000; saveData(data); socket.emit('dailyClaimed', player);
-  });
-
-  socket.on('redeemPromo', (code) => {
-    const player = data.players[socket.nickname]; if (code === 'TEST100') { if (player.promoUsed) return socket.emit('error', 'Использован'); player.promoUsed = true; player.shards += 100; saveData(data); socket.emit('promoSuccess'); } else socket.emit('error', 'Неверный промокод');
-  });
-
-  socket.on('upgradeIncome', () => {
-    const player = data.players[socket.nickname]; const cost = player.incomeLevel * 500;
-    if (player.credits < cost) return socket.emit('error', 'Нужно больше кредитов!');
-    player.credits -= cost; player.incomeLevel += 1; saveData(data); socket.emit('incomeUpdated', player.incomeLevel);
-  });
-
-  socket.on('buyItem', (itemId) => {
-    const player = data.players[socket.nickname]; const prices = { energy: 5, credits: 10, instantBuild: 15 };
-    if (player.shards < prices[itemId]) return socket.emit('error', 'Не хватает осколков!');
-    player.shards -= prices[itemId];
-    if (itemId === 'energy') player.energy = Math.min(player.maxEnergy, player.energy + 50);
-    if (itemId === 'credits') player.credits += 1000;
-    if (itemId === 'instantBuild') for (let id in player.buildings) if (player.buildings[id].upgrading) player.buildings[id].upgradeEnd = Date.now();
-    saveData(data); socket.emit('shopSuccess');
-  });
-
-  socket.on('upgradeBuilding', (buildingId) => {
-    const player = data.players[socket.nickname];
-    const b = player.buildings[buildingId];
-    if (b.upgrading) return;
-    const cost = b.level * 100, energyCost = b.level * 10;
-    if (player.credits < cost || player.energy < energyCost) return socket.emit('error', 'Не хватает ресурсов!');
-    player.credits -= cost; player.energy -= energyCost;
-    b.upgrading = true; b.upgradeEnd = Date.now() + 60000;
-    b.helpReq = false; b.helped = false;
-    player.quests.buildOnce = true;
-    saveData(data); socket.emit('buildingUpdated', { id: buildingId, building: b });
-  });
-
-  socket.on('claimQuest', (questId) => {
-    const player = data.players[socket.nickname]; const q = player.quests; if (q.claimed[questId]) return;
-    if (questId === 'q1' && q.buildOnce) { player.credits += 500; q.claimed.q1 = true; }
-    else if (questId === 'q2' && q.chatCount >= 3) { player.shards += 5; q.claimed.q2 = true; }
-    else if (questId === 'q3' && q.guildCreated) { player.credits += 2000; q.claimed.q3 = true; }
-    else return;
-    saveData(data); socket.emit('questClaimed', { questId, player });
-  });
+  socket.on('disconnect', () => { user = null; });
 });
 
-setInterval(() => {
-  let changed = false;
-  for (const nick in data.players) {
-    const p = data.players[nick];
-    const elapsed = (Date.now() - p.lastIncome) / 1000;
-    if (elapsed >= 1) {
-      p.credits += Math.floor(elapsed * (1 + (p.incomeLevel - 1) * 0.5));
-      p.lastIncome = Date.now(); changed = true;
-      if (Math.random() < 0.015) { p.shards += 1; io.to(nick).emit('shardFound'); }
+// Завершение строек и ПРОИЗВОДСТВО РЕСУРСОВ
+setInterval(async () => {
+  try {
+    const now = new Date();
+    const doneBuildings = await prisma.building.findMany({ where: { upgrading: true, upgradeEnd: { lte: now } } });
+    for (const b of doneBuildings) {
+      await prisma.building.update({ where: { id: b.id }, data: { upgrading: false, level: { increment: 1 } } });
+      io.to(b.userId).emit('buildingDone', b.type);
     }
-    for (const bid in p.buildings) {
-      const b = p.buildings[bid];
-      if (b.upgrading && Date.now() >= b.upgradeEnd) {
-        b.upgrading = false; b.level += 1; b.helpReq = false; b.helped = false; changed = true;
-        io.to(nick).emit('buildingCompleted', { id: bid, building: b });
+
+    // Производство (только для тех, у кого есть Завод или Электростанция)
+    const activeUsers = await prisma.user.findMany({ 
+      where: { buildings: { some: { type: { in: ['factory', 'powerplant'] }, level: { gt: 1 } } } },
+      include: { buildings: true } 
+    });
+
+    for (const u of activeUsers) {
+      const pLevel = u.buildings.find(b => b.type === 'powerplant')?.level || 0;
+      const fLevel = u.buildings.find(b => b.type === 'factory')?.level || 0;
+      
+      if (pLevel > 0 || fLevel > 0) {
+        await prisma.user.update({
+          where: { id: u.id },
+          data: {
+            metal: { increment: Math.floor(fLevel * 1.5) },
+            parts: { increment: Math.floor(fLevel * 0.5) },
+            energy: { increment: Math.floor(pLevel * 2) }
+          }
+        });
+        io.to(u.id).emit('syncPlayer'); // Обновляем интерфейс онлайн-игрокам
       }
     }
-  }
-  if (changed) saveData(data);
+  } catch(e) { console.error(e); }
 }, 5000);
 
-server.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

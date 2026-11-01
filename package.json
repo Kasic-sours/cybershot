@@ -1,16 +1,18 @@
 {
-  "name": "neo-edo",
-  "version": "1.0.0",
-  "description": "НЭО-ЭДО: Пепел Сакуры",
+  "name": "neo-edo-ash",
+  "version": "2.0.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "@prisma/client": "^5.10.2",
     "express": "^4.18.2",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.1",
+    "express-rate-limit": "^7.1.5"
   },
-  "engines": {
-    "node": ">=18"
+  "devDependencies": {
+    "prisma": "^5.10.2"
   }
 }
