@@ -38,7 +38,7 @@
     .tab-content { position: absolute; inset: 0; padding: 12px; overflow-y: auto; display: none; flex-direction: column; }
     .tab-content.active { display: flex; }
 
-    /* Нижнее меню - теперь 4 вкладки */
+    /* 5 вкладок */
     .bottom-nav { display: flex; background: #12122a; border-top: 1px solid #2a2a4a; padding-bottom: env(safe-area-inset-bottom); }
     .nav-btn { flex: 1; padding: 12px 0; text-align: center; font-size: 22px; color: #555; cursor: pointer; transition: 0.2s; }
     .nav-btn.active { color: #f0a0c0; background: #1a1a3a; border-top: 2px solid #f0a0c0; }
@@ -47,7 +47,7 @@
     .building-card .name { font-weight: bold; font-size: 15px; color: #fff; }
     .building-card .level { font-size: 12px; color: #888; margin-top: 2px; }
     .building-card .timer { font-size: 12px; color: #f0a0c0; margin-top: 4px; }
-    .btn-upg { background: #5a2a6a; border: 1px solid #7a4a8a; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; text-align: center; }
+    .btn-upg { background: #5a2a6a; border: 1px solid #7a4a8a; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
     .btn-upg:disabled { opacity: 0.5; }
     .income-card { border-color: #4ade80; background: #0a1a0a; }
     .income-card .btn-upg { background: #2a6a3a; border-color: #4ade80; }
@@ -60,7 +60,6 @@
     .chat-input-row input { flex: 1; padding: 10px; text-align: left; }
     .chat-input-row button { background: #5a2a6a; color: #fff; border: none; border-radius: 8px; padding: 0 16px; font-weight: bold; }
 
-    /* Модалки */
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 50; display: none; justify-content: center; align-items: center; padding: 20px; }
     .modal.active { display: flex; }
     .modal-box { background: #12122a; border: 1px solid #5a3a6a; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; position: relative; max-height: 80vh; overflow-y: auto; }
@@ -76,13 +75,15 @@
     .shop-item { display: flex; justify-content: space-between; align-items: center; background: #1a1a3a; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
     .shop-item button { background: #4ade80; color: #000; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; }
 
-    /* Квесты */
-    .quest-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .quest-title { font-weight: bold; color: #fff; font-size: 15px; }
-    .quest-desc { font-size: 13px; color: #aaa; }
-    .quest-reward { font-size: 13px; color: #4ade80; font-weight: bold; }
-    .btn-claim { background: #4ade80; color: #000; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .quest-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+    .quest-title { font-weight: bold; color: #fff; font-size: 15px; margin-bottom: 4px; }
+    .quest-desc { font-size: 13px; color: #aaa; margin-bottom: 8px; }
+    .quest-reward { font-size: 13px; color: #4ade80; font-weight: bold; margin-bottom: 8px; }
+    .btn-claim { background: #4ade80; color: #000; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
     .btn-claim:disabled { background: #2a2a4a; color: #666; cursor: not-allowed; }
+
+    .list-item { background: #1a1a3a; padding: 10px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+    .btn-action { background: #4ade80; color: #000; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -90,13 +91,11 @@
   <div id="screen-loading" class="screen active">
     <h1>НЭО-ЭДО</h1>
     <div class="spinner"></div>
-    <p style="color:#888; font-size:12px;">Инициализация...</p>
   </div>
 
   <div id="screen-login" class="screen">
     <div class="content-box">
       <h1>Пепел Сакуры</h1>
-      <p style="text-align:center; margin-bottom:30px;">Введите имя вашего аватара</p>
       <input type="text" id="nick-input" placeholder="Ваш никнейм" maxlength="16" autocomplete="off">
       <button class="btn" id="btn-login" style="margin-top:20px;">Подключиться</button>
     </div>
@@ -105,8 +104,7 @@
   <div id="screen-lore" class="screen">
     <div class="content-box">
       <h1>Год 2142</h1>
-      <p>Великая Синтоистская Империя пала. Неоновые вывески корпораций заменили солнечный свет, а древние храмы превратились в серверные стойки.</p>
-      <p>Клан «Пепел Сакуры» — последний оплот свободы в мегаполисе НЭО-ЭДО. Вы — избранный, чей разум был оцифрован и пробужден после столетий сна.</p>
+      <p>Империя пала. Неоновые вывески корпораций заменили солнечный свет. Клан «Пепел Сакуры» — последний оплот свободы.</p>
       <button class="btn" id="btn-to-classes">Принять судьбу</button>
     </div>
   </div>
@@ -115,18 +113,9 @@
     <div class="content-box">
       <h1 style="margin-bottom:10px;">Выберите путь</h1>
       <div class="class-grid">
-        <div class="class-card" onclick="selectClass('samurai')">
-          <h3>⚔️ Кибер-Самурай</h3>
-          <p>Мастер клинка. Начинает с Кузницей 2 уровня.</p>
-        </div>
-        <div class="class-card" onclick="selectClass('monk')">
-          <h3>⛩️ Техно-Монах</h3>
-          <p>Черпает силу из сети. +50 к макс. энергии.</p>
-        </div>
-        <div class="class-card" onclick="selectClass('merchant')">
-          <h3>💼 Торговец</h3>
-          <p>Знает цену кредитам. +500 кредитов на старте.</p>
-        </div>
+        <div class="class-card" onclick="selectClass('samurai')"><h3>⚔️ Кибер-Самурай</h3><p>Начинает с Кузницей 2 ур.</p></div>
+        <div class="class-card" onclick="selectClass('monk')"><h3>⛩️ Техно-Монах</h3><p>+50 к макс. энергии.</p></div>
+        <div class="class-card" onclick="selectClass('merchant')"><h3>💼 Торговец</h3><p>+500 кредитов.</p></div>
       </div>
     </div>
   </div>
@@ -161,13 +150,42 @@
         <div id="quests-list"></div>
       </div>
 
+      <!-- Вкладка Друзья -->
+      <div id="tab-friends" class="tab-content">
+        <h3 style="color:#f0a0c0; margin-bottom:10px;">Друзья</h3>
+        <div style="display:flex; gap:8px; margin-bottom:15px;">
+          <input type="text" id="friend-id-input" placeholder="ID друга (напр. A1B2C3)" style="text-align:left; padding:8px;">
+          <button class="btn-action" onclick="addFriend()">Добавить</button>
+        </div>
+        
+        <h4 style="color:#fff; margin-bottom:5px;">Заявки в друзья:</h4>
+        <div id="friend-requests-list" style="margin-bottom:15px;"></div>
+        
+        <h4 style="color:#fff; margin-bottom:5px;">Мои друзья:</h4>
+        <div id="friends-list"></div>
+
+        <h4 style="color:#fff; margin-bottom:5px; margin-top:15px;">Приглашения в гильдию:</h4>
+        <div id="guild-invites-list"></div>
+      </div>
+
       <div id="tab-guild" class="tab-content">
         <h3 style="color:#f0a0c0; margin-bottom:10px;">Гильдия</h3>
         <div id="guild-info" style="margin-bottom:10px; font-size:14px; color:#aaa;">Вы не в гильдии</div>
+        
         <div id="guild-create-form">
-          <input type="text" id="guild-name-input" placeholder="Название гильдии" style="margin-bottom:10px;">
+          <input type="text" id="guild-name-input" placeholder="Название" style="margin-bottom:10px;">
           <button class="btn-upg" style="width:100%;" onclick="createGuild()">Создать (500💰)</button>
         </div>
+        
+        <!-- Блок приглашений (только для лидера) -->
+        <div id="guild-invite-form" style="display:none; margin-top:15px; background:#1a1a3a; padding:10px; border-radius:8px;">
+          <p style="font-size:12px; margin-bottom:5px;">Пригласить по ID:</p>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="guild-invite-id" placeholder="ID игрока" style="padding:8px; text-align:left;">
+            <button class="btn-upg" onclick="inviteToGuild()" style="padding:8px;">Пригласить</button>
+          </div>
+        </div>
+        
         <div id="guild-members-list" style="margin-top:15px;"></div>
       </div>
     </div>
@@ -176,17 +194,22 @@
       <div class="nav-btn active" data-tab="city" onclick="switchTab('city')">🏙️</div>
       <div class="nav-btn" data-tab="chat" onclick="switchTab('chat')">💬</div>
       <div class="nav-btn" data-tab="quests" onclick="switchTab('quests')">📜</div>
+      <div class="nav-btn" data-tab="friends" onclick="switchTab('friends')">👥</div>
       <div class="nav-btn" data-tab="guild" onclick="switchTab('guild')">⚔️</div>
     </div>
   </div>
 
+  <!-- Модалки -->
   <div id="modal-profile" class="modal">
     <div class="modal-box">
       <button class="close-btn" onclick="closeModal('modal-profile')">×</button>
       <h2 id="profile-title">Профиль</h2>
       <div id="profile-content" style="font-size:14px; line-height:1.6; margin-bottom: 15px;"></div>
       
-      <!-- Блок промокода -->
+      <div id="daily-section" style="display:none; margin-bottom: 15px;">
+        <button class="btn-claim" onclick="claimDaily()">🎁 Забрать ежедневную награду</button>
+      </div>
+
       <div id="promo-section" style="border-top: 1px solid #2a2a4a; padding-top: 15px;">
         <p style="margin-bottom: 8px; font-size: 14px; color: #aaa;">Ввести промокод:</p>
         <div style="display:flex; gap:8px;">
@@ -204,6 +227,15 @@
       <div class="shop-item"><div><b>+50 Энергии</b></div><button onclick="buyItem('energy')">💎 5</button></div>
       <div class="shop-item"><div><b>+1000 Кредитов</b></div><button onclick="buyItem('credits')">💎 10</button></div>
       <div class="shop-item"><div><b>Мгновенная стройка</b></div><button onclick="buyItem('instantBuild')">💎 15</button></div>
+    </div>
+  </div>
+
+  <!-- Модалка офлайн-дохода -->
+  <div id="modal-offline" class="modal">
+    <div class="modal-box" style="text-align:center;">
+      <h2>Добро пожаловать!</h2>
+      <p id="offline-text" style="font-size:16px; margin:20px 0;"></p>
+      <button class="btn-claim" onclick="closeModal('modal-offline')">Забрать</button>
     </div>
   </div>
 
@@ -228,11 +260,21 @@
       setTimeout(() => { t.style.opacity = '0'; t.style.transition = '0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
     }
 
-    setTimeout(() => {
-      showScreen('screen-login');
-      const saved = localStorage.getItem('neo_edo_nick');
-      if (saved) document.getElementById('nick-input').value = saved;
-    }, 1000);
+    // --- ЛОКАЛЬНОЕ СОХРАНЕНИЕ ---
+    window.onload = () => {
+      const savedNick = localStorage.getItem('neo_edo_nick');
+      const savedPlayer = localStorage.getItem('neo_edo_player');
+      
+      if (savedNick && savedPlayer) {
+        myNickname = savedNick;
+        myPlayer = JSON.parse(savedPlayer);
+        startGame(true); // Запускаем игру из кэша
+        socket.emit('register', savedNick); // Синхронизируемся с сервером
+      } else {
+        showScreen('screen-login');
+        if (savedNick) document.getElementById('nick-input').value = savedNick;
+      }
+    };
 
     document.getElementById('btn-login').onclick = () => {
       const nick = document.getElementById('nick-input').value.trim();
@@ -241,31 +283,42 @@
       socket.emit('register', nick);
     };
 
-    socket.on('registered', (player) => {
-      myPlayer = player;
-      myNickname = player.nickname;
-      if (!player.playerClass) showScreen('screen-lore');
-      else startGame();
+    socket.on('registered', (data) => {
+      myPlayer = data.player;
+      myNickname = data.player.nickname;
+      localStorage.setItem('neo_edo_player', JSON.stringify(myPlayer)); // Сохраняем
+
+      if (!myPlayer.playerClass) {
+        showScreen('screen-lore');
+      } else {
+        startGame(false);
+        if (data.offlineEarnings > 0) {
+          document.getElementById('offline-text').textContent = `Пока вас не было, ваши здания принесли: ${formatNumber(data.offlineEarnings)} 💰`;
+          document.getElementById('modal-offline').classList.add('active');
+        }
+      }
     });
 
     document.getElementById('btn-to-classes').onclick = () => showScreen('screen-classes');
     window.selectClass = (cls) => socket.emit('setClass', cls);
-
     socket.on('classUpdated', (player) => {
       myPlayer = player;
-      startGame();
+      localStorage.setItem('neo_edo_player', JSON.stringify(myPlayer));
+      startGame(false);
     });
 
-    function startGame() {
+    function startGame(isFromCache) {
       showScreen('screen-game');
-      socket.emit('setOnline', myNickname);
+      if (!isFromCache) socket.emit('setOnline', myNickname);
       updateHUD();
       renderBuildings();
       renderQuests();
+      socket.emit('getFriends'); // Запрашиваем друзей
     }
 
     socket.on('playerSync', (player) => {
       myPlayer = player;
+      localStorage.setItem('neo_edo_player', JSON.stringify(myPlayer)); // Обновляем кэш
       updateHUD();
       renderBuildings();
       renderQuests();
@@ -280,30 +333,21 @@
       setVal('hud-nickname', myPlayer.nickname);
     }
 
-    function formatNumber(n) {
-      return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : Math.floor(n || 0);
-    }
+    function formatNumber(n) { return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : Math.floor(n || 0); }
 
-    setInterval(() => {
-      if (myNickname && document.getElementById('screen-game').classList.contains('active')) {
-        socket.emit('syncPlayer');
-      }
-    }, 3000);
+    setInterval(() => { if (myNickname) socket.emit('syncPlayer'); }, 5000);
 
     window.switchTab = (tabName) => {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
       document.getElementById(`tab-${tabName}`).classList.add('active');
       document.querySelector(`.nav-btn[data-tab="${tabName}"]`).classList.add('active');
-      if (tabName === 'chat') {
-        const chat = document.getElementById('chat-messages');
-        chat.scrollTop = chat.scrollHeight;
-      }
+      if (tabName === 'chat') document.getElementById('chat-messages').scrollTop = 99999;
+      if (tabName === 'friends') socket.emit('getFriends'); // Обновляем друзей при входе
     };
 
-    // --- ПОСТРОЙКИ (с ценами) ---
+    // --- ПОСТРОЙКИ ---
     const BUILDING_NAMES = { house: '🏠 Дом', forge: '🔨 Кузница', shrine: '⛩️ Святилище', datacenter: '🖥️ Дата-центр' };
-    
     function renderBuildings() {
       if (!myPlayer || !myPlayer.buildings) return;
       const container = document.getElementById('buildings-list');
@@ -317,103 +361,94 @@
 
         for (const id in BUILDING_NAMES) {
           const card = document.createElement('div');
-          card.className = 'building-card';
-          card.dataset.id = id;
+          card.className = 'building-card'; card.dataset.id = id;
           card.innerHTML = `<div class="info"><div class="name">${BUILDING_NAMES[id]}</div><div class="level">Ур. <span class="lvl-val"></span></div><div class="timer"></div></div><button class="btn-upg">Улучшить</button>`;
           card.querySelector('button').onclick = () => socket.emit('upgradeBuilding', id);
           container.appendChild(card);
         }
       }
 
-      const incLvl = document.getElementById('inc-lvl');
-      if (incLvl) incLvl.textContent = myPlayer.incomeLevel || 1;
-      const btnInc = document.getElementById('btn-inc');
-      if (btnInc) btnInc.textContent = `Улучшить (${(myPlayer.incomeLevel || 1) * 500}💰)`;
+      document.getElementById('inc-lvl').textContent = myPlayer.incomeLevel || 1;
+      document.getElementById('btn-inc').textContent = `Улучшить (${(myPlayer.incomeLevel || 1) * 500}💰)`;
 
       for (const id in BUILDING_NAMES) {
         const b = myPlayer.buildings[id];
         const card = container.querySelector(`[data-id="${id}"]`);
         if (!card || !b) continue;
-        
         card.querySelector('.lvl-val').textContent = b.level;
         const timerEl = card.querySelector('.timer'), btn = card.querySelector('button');
-        
         if (b.upgrading) {
           timerEl.textContent = `⏳ ${Math.max(0, Math.ceil((b.upgradeEnd - Date.now()) / 1000))}с`;
-          btn.disabled = true;
-          btn.textContent = 'В процессе';
+          btn.disabled = true; btn.textContent = 'В процессе';
         } else {
-          timerEl.textContent = '';
-          btn.disabled = false;
-          // Показываем стоимость
+          timerEl.textContent = ''; btn.disabled = false;
           btn.textContent = `Улучшить (${b.level * 100}💰 ${b.level * 10}⚡)`;
         }
       }
     }
-
     setInterval(() => { if (myPlayer) renderBuildings(); }, 1000);
 
     // --- КВЕСТЫ ---
     function renderQuests() {
       if (!myPlayer || !myPlayer.quests) return;
-      const container = document.getElementById('quests-list');
       const q = myPlayer.quests;
-      let html = '';
-
-      // Квест 1
-      let q1Done = q.buildOnce;
-      let q1Claimed = q.claimed.q1;
-      html += `<div class="quest-card">
-        <div class="quest-title">Мастер на все руки</div>
-        <div class="quest-desc">Улучшите любое здание 1 раз.</div>
-        <div class="quest-reward">Награда: 500💰</div>
-        <button class="btn-claim" ${(!q1Done || q1Claimed) ? 'disabled' : ''} onclick="claimQuest('q1')">
-          ${q1Claimed ? 'Получено' : (q1Done ? 'Забрать' : 'В процессе...')}
-        </button>
-      </div>`;
-
-      // Квест 2
-      let q2Done = q.chatCount >= 3;
-      let q2Claimed = q.claimed.q2;
-      html += `<div class="quest-card">
-        <div class="quest-title">Голос улиц</div>
-        <div class="quest-desc">Отправьте 3 сообщения в общий чат (${Math.min(q.chatCount, 3)}/3).</div>
-        <div class="quest-reward">Награда: 5💎</div>
-        <button class="btn-claim" ${(!q2Done || q2Claimed) ? 'disabled' : ''} onclick="claimQuest('q2')">
-          ${q2Claimed ? 'Получено' : (q2Done ? 'Забрать' : 'В процессе...')}
-        </button>
-      </div>`;
-
-      // Квест 3
-      let q3Done = q.guildCreated;
-      let q3Claimed = q.claimed.q3;
-      html += `<div class="quest-card">
-        <div class="quest-title">Лидер клана</div>
-        <div class="quest-desc">Создайте свою гильдию.</div>
-        <div class="quest-reward">Награда: 2000💰</div>
-        <button class="btn-claim" ${(!q3Done || q3Claimed) ? 'disabled' : ''} onclick="claimQuest('q3')">
-          ${q3Claimed ? 'Получено' : (q3Done ? 'Забрать' : 'В процессе...')}
-        </button>
-      </div>`;
-
-      container.innerHTML = html;
+      document.getElementById('quests-list').innerHTML = `
+        <div class="quest-card">
+          <div class="quest-title">Мастер на все руки</div><div class="quest-desc">Улучшите любое здание 1 раз.</div>
+          <div class="quest-reward">Награда: 500💰</div>
+          <button class="btn-claim" ${(!q.buildOnce || q.claimed.q1) ? 'disabled' : ''} onclick="claimQuest('q1')">${q.claimed.q1 ? 'Получено' : (q.buildOnce ? 'Забрать' : 'В процессе...')}</button>
+        </div>
+        <div class="quest-card">
+          <div class="quest-title">Голос улиц</div><div class="quest-desc">Отправьте 3 сообщения в чат (${Math.min(q.chatCount, 3)}/3).</div>
+          <div class="quest-reward">Награда: 5💎</div>
+          <button class="btn-claim" ${(!q.chatCount >= 3 || q.claimed.q2) ? 'disabled' : ''} onclick="claimQuest('q2')">${q.claimed.q2 ? 'Получено' : (q.chatCount >= 3 ? 'Забрать' : 'В процессе...')}</button>
+        </div>
+        <div class="quest-card">
+          <div class="quest-title">Лидер клана</div><div class="quest-desc">Создайте свою гильдию.</div>
+          <div class="quest-reward">Награда: 2000💰</div>
+          <button class="btn-claim" ${(!q.guildCreated || q.claimed.q3) ? 'disabled' : ''} onclick="claimQuest('q3')">${q.claimed.q3 ? 'Получено' : (q.guildCreated ? 'Забрать' : 'В процессе...')}</button>
+        </div>`;
     }
-
     window.claimQuest = (id) => socket.emit('claimQuest', id);
+    socket.on('questClaimed', (data) => { myPlayer = data.player; updateHUD(); renderQuests(); showToast('Награда получена!', 'success'); });
 
-    socket.on('questClaimed', (data) => {
-      myPlayer = data.player;
-      updateHUD();
-      renderQuests();
-      showToast('Награда получена!', 'success');
+    // --- ДРУЗЬЯ ---
+    window.addFriend = () => {
+      const id = document.getElementById('friend-id-input').value.trim().toUpperCase();
+      if (id) socket.emit('addFriend', id);
+    };
+    window.acceptFriend = (id) => socket.emit('acceptFriend', id);
+
+    socket.on('friendsData', (data) => {
+      let reqHtml = '';
+      if (data.requests.length === 0) reqHtml = '<p style="font-size:12px; color:#888;">Нет заявок</p>';
+      data.requests.forEach(r => {
+        reqHtml += `<div class="list-item"><span>${r.nickname} (${r.id})</span><button class="btn-action" onclick="acceptFriend('${r.id}')">Принять</button></div>`;
+      });
+      document.getElementById('friend-requests-list').innerHTML = reqHtml;
+
+      let friendsHtml = '';
+      if (data.friends.length === 0) friendsHtml = '<p style="font-size:12px; color:#888;">Список пуст</p>';
+      data.friends.forEach(f => {
+        friendsHtml += `<div class="list-item" onclick="openProfile('${f.nickname}')"><span>${f.nickname}</span><span style="font-size:10px; color:#888;">${f.id}</span></div>`;
+      });
+      document.getElementById('friends-list').innerHTML = friendsHtml;
+
+      let invHtml = '';
+      if (data.invites.length === 0) invHtml = '<p style="font-size:12px; color:#888;">Нет приглашений</p>';
+      data.invites.forEach(i => {
+        invHtml += `<div class="list-item"><span>Гильдия: ${i.name}</span><button class="btn-action" onclick="acceptGuildInvite('${i.id}')">Вступить</button></div>`;
+      });
+      document.getElementById('guild-invites-list').innerHTML = invHtml;
     });
+
+    socket.on('friendRequestReceived', () => { socket.emit('getFriends'); showToast('Новая заявка в друзья!', 'info'); });
 
     // --- ЧАТ ---
     socket.on('chatMessage', (msg) => {
       const chat = document.getElementById('chat-messages');
       if (chat.children.length > 50) chat.removeChild(chat.firstChild);
-      const div = document.createElement('div');
-      div.className = 'chat-msg';
+      const div = document.createElement('div'); div.className = 'chat-msg';
       div.innerHTML = `<span class="from" onclick="openProfile('${msg.from}')">${msg.from}</span>: <span class="text">${escapeHtml(msg.text)}</span>`;
       chat.appendChild(div);
       if (document.getElementById('tab-chat').classList.contains('active')) chat.scrollTop = chat.scrollHeight;
@@ -426,36 +461,58 @@
     document.getElementById('chat-input').onkeypress = (e) => { if (e.key === 'Enter') document.getElementById('chat-send').click(); };
     function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 
+    // --- ГИЛЬДИЯ ---
     window.createGuild = () => {
       const name = document.getElementById('guild-name-input').value.trim();
       if (name) socket.emit('createGuild', name);
     };
+    window.inviteToGuild = () => {
+      const id = document.getElementById('guild-invite-id').value.trim().toUpperCase();
+      if (id) socket.emit('inviteToGuild', id);
+    };
+    window.acceptGuildInvite = (id) => socket.emit('acceptGuildInvite', id);
 
     socket.on('guildUpdated', (guild) => {
       document.getElementById('guild-create-form').style.display = 'none';
       document.getElementById('guild-info').textContent = `Гильдия: ${guild.name}`;
+      
+      // Показываем форму приглашения, если мы лидер
+      if (myPlayer && guild.members[myPlayer.nickname] === 'leader') {
+        document.getElementById('guild-invite-form').style.display = 'block';
+      }
+
       let html = '';
-      for (const nick in guild.members) html += `<div style="padding:8px; background:#1a1a3a; margin-bottom:4px; border-radius:6px;" onclick="openProfile('${nick}')">${nick} (${guild.members[nick]})</div>`;
+      for (const nick in guild.members) html += `<div class="list-item" onclick="openProfile('${nick}')"><span>${nick}</span><span>${guild.members[nick]}</span></div>`;
       document.getElementById('guild-members-list').innerHTML = html;
     });
 
-    // --- ПРОФИЛЬ И ПРОМОКОД ---
-    window.openProfile = (nick) => {
-      socket.emit('getProfile', nick);
-    };
+    socket.on('guildInviteReceived', () => { socket.emit('getFriends'); showToast('Вас пригласили в гильдию!', 'info'); });
+
+    // --- ПРОФИЛЬ ---
+    window.openProfile = (nick) => socket.emit('getProfile', nick);
 
     socket.on('profileData', (p) => {
       document.getElementById('profile-title').textContent = p.nickname;
       document.getElementById('profile-content').innerHTML = `
-        <b>Класс:</b> ${p.playerClass || 'Не выбран'}<br><b>Уровень:</b> ${p.level}<br>
+        <b>ID:</b> <span style="color:#4ade80; font-weight:bold;">${p.id}</span><br>
+        <b>Класс:</b> ${p.playerClass}<br><b>Уровень:</b> ${p.level}<br>
         <b>Гильдия:</b> ${p.guild}<br><b>Кредиты:</b> ${formatNumber(p.credits)}<br>
-        <b>Осколки:</b> ${p.shards}<br><b>Доход:</b> Ур. ${p.incomeLevel || 1}`;
+        <b>Осколки:</b> ${p.shards}`;
       
-      // Скрываем промокод, если смотрим чужой профиль или уже использовали
-      if (p.nickname === myNickname && !p.promoUsed) {
-        document.getElementById('promo-section').style.display = 'block';
+      // Кнопки для своего профиля
+      if (p.nickname === myNickname) {
+        document.getElementById('promo-section').style.display = p.promoUsed ? 'none' : 'block';
+        
+        // Проверка кулдауна ежедневки (24 часа)
+        const cooldown = 24 * 3600 * 1000;
+        if (Date.now() - p.lastDaily > cooldown) {
+          document.getElementById('daily-section').style.display = 'block';
+        } else {
+          document.getElementById('daily-section').style.display = 'none';
+        }
       } else {
         document.getElementById('promo-section').style.display = 'none';
+        document.getElementById('daily-section').style.display = 'none';
       }
       
       document.getElementById('modal-profile').classList.add('active');
@@ -465,13 +522,13 @@
       const code = document.getElementById('promo-input').value.trim();
       if (code) socket.emit('redeemPromo', code);
     };
+    socket.on('promoSuccess', () => { showToast('Промокод активирован! +100 💎', 'success'); closeModal('modal-profile'); socket.emit('syncPlayer'); });
 
-    socket.on('promoSuccess', () => {
-      showToast('Промокод активирован! +100 💎', 'success');
-      document.getElementById('promo-input').value = '';
-      document.getElementById('promo-section').style.display = 'none';
-      socket.emit('syncPlayer');
-    });
+    window.claimDaily = () => {
+      socket.emit('claimDaily');
+      closeModal('modal-profile');
+    };
+    socket.on('dailyClaimed', () => { showToast('Ежедневная награда получена! +50💎 +1000💰', 'success'); socket.emit('syncPlayer'); });
 
     // --- ОСТАЛЬНОЕ ---
     window.toggleShop = () => document.getElementById('modal-shop').classList.add('active');
@@ -479,10 +536,8 @@
     window.buyItem = (item) => socket.emit('buyItem', item);
 
     socket.on('shardFound', () => { socket.emit('syncPlayer'); showToast('✨ Вы нашли Осколок Сакуры!', 'success'); });
-    socket.on('buildingUpdated', ({ id, building }) => { if(myPlayer) myPlayer.buildings[id] = building; });
-    socket.on('buildingCompleted', ({ id, building }) => { if(myPlayer) myPlayer.buildings[id] = building; renderBuildings(); showToast('Постройка улучшена!', 'success'); });
-    socket.on('incomeUpdated', (lvl) => { if(myPlayer) { myPlayer.incomeLevel = lvl; renderBuildings(); } });
-    socket.on('shopSuccess', (data) => { socket.emit('syncPlayer'); showToast('Покупка успешна!', 'success'); });
+    socket.on('buildingCompleted', () => { socket.emit('syncPlayer'); showToast('Постройка улучшена!', 'success'); });
+    socket.on('shopSuccess', () => { socket.emit('syncPlayer'); showToast('Покупка успешна!', 'success'); });
     socket.on('error', (msg) => showToast(msg, 'error'));
   </script>
 </body>
