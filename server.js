@@ -12,13 +12,19 @@ const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 
 function loadData() {
-  try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } 
-  catch { return { players: {}, guilds: {}, idToNick: {} }; }
+  try { 
+    const d = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); 
+    if (!d.chatHistory) d.chatHistory = [];
+    return d;
+  } 
+  catch { return { players: {}, guilds: {}, idToNick: {}, chatHistory: [] }; }
 }
 function saveData(data) { fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2)); }
 
 let data = loadData();
 if (!data.idToNick) data.idToNick = {};
+if (!data.chatHistory) data.chatHistory = [];
+
 app.use(express.static('public'));
 
 function generateId() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
@@ -69,13 +75,80 @@ io.on('connection', (socket) => {
       
       socket.nickname = nickname;
       
-      // Отправляем профиль + гильдию
       const guild = player.guildId ? data.guilds[player.guildId] : null;
       socket.emit('registered', { player, guild, offlineEarnings });
+      socket.emit('chatHistory', data.chatHistory); // Отправляем историю чата
       
     } catch (e) { console.error(e); }
   });
 
+  socket.on('chatMessage', (msg) => {
+    if (!socket.nickname || !msg.trim()) return;
+    const player = data.players[socket.nickname];
+    if(!player) return;
+    player.quests.chatCount += 1;
+    
+    const msgData = { from: socket.nickname, text: msg, time: Date.now() };
+    
+    // Сохраняем историю (максимум 50 сообщений)
+    data.chatHistory.push(msgData);
+    if (data.chatHistory.length > 50) data.chatHistory.shift();
+    saveData(data);
+    
+    io.emit('chatMessage', msgData); // Отправляем ВСЕМ
+  });
+
+  // --- ГИЛЬДИИ: Список и Заявки ---
+  socket.on('getAllGuilds', () => {
+    const list = Object.values(data.guilds).map(g => ({
+      id: g.id, name: g.name, leader: g.leader, members: Object.keys(g.members).length
+    }));
+    socket.emit('allGuildsList', list);
+  });
+
+  socket.on('requestJoinGuild', (guildId) => {
+    const player = data.players[socket.nickname];
+    const guild = data.guilds[guildId];
+    if (!guild) return;
+    if (player.guildId) return socket.emit('error', 'Вы уже в гильдии');
+    
+    if (!guild.requests) guild.requests = [];
+    if (!guild.requests.includes(player.nickname)) {
+      guild.requests.push(player.nickname);
+      saveData(data);
+      socket.emit('error', 'Заявка отправлена лидеру!');
+      // Уведомляем лидера
+      io.emit('guildRequestReceived', { leader: guild.leader, guildId });
+    }
+  });
+
+  socket.on('acceptJoinRequest', ({ guildId, nickname }) => {
+    const guild = data.guilds[guildId];
+    const player = data.players[nickname];
+    const leader = data.players[socket.nickname];
+    
+    if (!guild || !player || leader.guildRole !== 'leader') return;
+    
+    guild.requests = guild.requests.filter(n => n !== nickname);
+    player.guildInvites = player.guildInvites.filter(id => id !== guildId);
+    player.guildId = guildId;
+    player.guildRole = 'private';
+    guild.members[nickname] = 'private';
+    
+    saveData(data);
+    socket.emit('guildUpdated', guild);
+    io.emit('guildMemberJoined', { guildId, nickname });
+  });
+
+  socket.on('getLeaderRequests', () => {
+    const player = data.players[socket.nickname];
+    if (!player || !player.guildId || player.guildRole !== 'leader') return;
+    const guild = data.guilds[player.guildId];
+    if (!guild) return;
+    socket.emit('leaderRequestsList', guild.requests || []);
+  });
+
+  // --- ОСТАЛЬНОЕ (синхронизация и т.д.) ---
   socket.on('setClass', (className) => {
     const player = data.players[socket.nickname];
     if (!player || player.playerClass) return;
@@ -84,17 +157,6 @@ io.on('connection', (socket) => {
     if (className === 'monk') { player.maxEnergy += 50; player.energy += 50; }
     if (className === 'merchant') player.credits += 500;
     saveData(data); socket.emit('classUpdated', player);
-  });
-
-  socket.on('setOnline', (nickname) => { socket.nickname = nickname; });
-
-  socket.on('chatMessage', (msg) => {
-    if (!socket.nickname || !msg.trim()) return;
-    const player = data.players[socket.nickname];
-    if(!player) return;
-    player.quests.chatCount += 1;
-    saveData(data);
-    io.emit('chatMessage', { from: socket.nickname, text: msg, time: Date.now() }); 
   });
 
   socket.on('syncPlayer', () => {
@@ -109,51 +171,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // --- Друзья ---
-  socket.on('addFriend', (targetId) => {
-    const player = data.players[socket.nickname];
-    if (targetId === player.id) return socket.emit('error', 'Это ваш ID');
-    const targetNick = data.idToNick[targetId];
-    if (!targetNick) return socket.emit('error', 'Игрок не найден');
-    const target = data.players[targetNick];
-    if (player.friends.includes(targetId)) return socket.emit('error', 'Уже в друзьях');
-    if (!target.friendRequests.includes(player.id)) {
-      target.friendRequests.push(player.id);
-      saveData(data);
-      io.emit('friendRequestReceived', targetNick); // Рассылаем всем, клиент фильтрует
-    }
-    socket.emit('error', 'Запрос отправлен!');
-  });
-
-  socket.on('acceptFriend', (senderId) => {
-    const player = data.players[socket.nickname];
-    const senderNick = data.idToNick[senderId];
-    if (!senderNick) return;
-    const sender = data.players[senderNick];
-    player.friendRequests = player.friendRequests.filter(id => id !== senderId);
-    if (!player.friends.includes(senderId)) player.friends.push(senderId);
-    if (!sender.friends.includes(player.id)) sender.friends.push(player.id);
-    saveData(data);
-    socket.emit('friendsUpdated');
-    io.emit('friendRequestReceived', senderNick);
-  });
-
-  socket.on('getFriends', () => {
-    const player = data.players[socket.nickname];
-    if(!player) return;
-    const friendsList = player.friends.map(id => ({ id, nickname: data.idToNick[id] }));
-    const reqsList = player.friendRequests.map(id => ({ id, nickname: data.idToNick[id] }));
-    const guildInvs = player.guildInvites.map(gid => ({ id: gid, name: data.guilds[gid]?.name }));
-    socket.emit('friendsData', { friends: friendsList, requests: reqsList, invites: guildInvs });
-  });
-
-  // --- Гильдии ---
   socket.on('createGuild', (guildName) => {
     const player = data.players[socket.nickname];
     if (!player || player.credits < 500) return socket.emit('error', 'Нужно 500 кредитов!');
     if (player.guildId) return socket.emit('error', 'Вы уже в гильдии');
     const guildId = 'g_' + Date.now();
-    data.guilds[guildId] = { id: guildId, name: guildName, leader: socket.nickname, members: { [socket.nickname]: 'leader' } };
+    data.guilds[guildId] = { id: guildId, name: guildName, leader: socket.nickname, members: { [socket.nickname]: 'leader' }, requests: [] };
     player.credits -= 500; player.guildId = guildId; player.guildRole = 'leader';
     player.quests.guildCreated = true;
     saveData(data); 
@@ -188,15 +211,50 @@ io.on('connection', (socket) => {
     io.emit('guildMemberJoined', { guildId, nickname: player.nickname });
   });
 
-  // --- Профиль и награды ---
+  // Друзья и профиль (без изменений, для краткости)
+  socket.on('addFriend', (targetId) => {
+    const player = data.players[socket.nickname];
+    if (targetId === player.id) return socket.emit('error', 'Это ваш ID');
+    const targetNick = data.idToNick[targetId];
+    if (!targetNick) return socket.emit('error', 'Игрок не найден');
+    const target = data.players[targetNick];
+    if (player.friends.includes(targetId)) return socket.emit('error', 'Уже в друзьях');
+    if (!target.friendRequests.includes(player.id)) {
+      target.friendRequests.push(player.id);
+      saveData(data);
+      io.emit('friendRequestReceived', targetNick);
+    }
+    socket.emit('error', 'Запрос отправлен!');
+  });
+
+  socket.on('acceptFriend', (senderId) => {
+    const player = data.players[socket.nickname];
+    const senderNick = data.idToNick[senderId];
+    if (!senderNick) return;
+    const sender = data.players[senderNick];
+    player.friendRequests = player.friendRequests.filter(id => id !== senderId);
+    if (!player.friends.includes(senderId)) player.friends.push(senderId);
+    if (!sender.friends.includes(player.id)) sender.friends.push(player.id);
+    saveData(data);
+    socket.emit('friendsUpdated');
+    io.emit('friendRequestReceived', senderNick);
+  });
+
+  socket.on('getFriends', () => {
+    const player = data.players[socket.nickname];
+    if(!player) return;
+    socket.emit('friendsData', { 
+      friends: player.friends.map(id => ({ id, nickname: data.idToNick[id] })), 
+      requests: player.friendRequests.map(id => ({ id, nickname: data.idToNick[id] })), 
+      invites: player.guildInvites.map(gid => ({ id: gid, name: data.guilds[gid]?.name }))
+    });
+  });
+
   socket.on('getProfile', (nickname) => {
     const p = data.players[nickname];
     if (!p) return;
     const guild = p.guildId ? data.guilds[p.guildId] : null;
-    socket.emit('profileData', { 
-      nickname: p.nickname, id: p.id, level: p.level, guild: guild ? guild.name : 'Нет', playerClass: p.playerClass || 'Не выбран',
-      credits: p.credits, shards: p.shards, incomeLevel: p.incomeLevel, promoUsed: p.promoUsed, lastDaily: p.lastDaily
-    });
+    socket.emit('profileData', { nickname: p.nickname, id: p.id, level: p.level, guild: guild ? guild.name : 'Нет', playerClass: p.playerClass || 'Не выбран', credits: p.credits, shards: p.shards, incomeLevel: p.incomeLevel, promoUsed: p.promoUsed, lastDaily: p.lastDaily });
   });
 
   socket.on('claimDaily', () => {
