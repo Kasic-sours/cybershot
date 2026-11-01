@@ -5,86 +5,167 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>НЭО-ЭДО: Пепел Сакуры</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap');
+
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; background: #0a0a12; color: #e0e0e0; }
-    .screen { position: absolute; inset: 0; display: none; flex-direction: column; z-index: 10; background: #0a0a12; }
+    html, body { height: 100%; overflow: hidden; font-family: 'Rajdhani', system-ui, sans-serif; background: #09090e; color: #e0e0e0; }
+    
+    /* ФОН С КИБЕРПАНК-ГРАДИЕНТОМ */
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background: 
+        radial-gradient(circle at 15% 50%, rgba(255, 0, 127, 0.15), transparent 40%),
+        radial-gradient(circle at 85% 30%, rgba(0, 255, 255, 0.15), transparent 40%),
+        linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    }
+
+    .screen { position: absolute; inset: 0; display: none; flex-direction: column; z-index: 10; }
     .screen.active { display: flex; }
-    #screen-loading { justify-content: center; align-items: center; gap: 20px; z-index: 100; }
-    .spinner { width: 40px; height: 40px; border: 3px solid rgba(240,160,192,0.2); border-top-color: #f0a0c0; border-radius: 50%; animation: spin 1s linear infinite; }
+    
+    #screen-loading { justify-content: center; align-items: center; gap: 20px; z-index: 100; background: #09090e; }
+    .spinner { width: 50px; height: 50px; border: 3px solid rgba(255, 0, 127, 0.2); border-top-color: #ff007f; border-radius: 50%; animation: spin 1s linear infinite; box-shadow: 0 0 15px #ff007f; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .content-box { padding: 24px; display: flex; flex-direction: column; flex: 1; overflow-y: auto; justify-content: center; }
-    h1 { color: #f0a0c0; text-align: center; font-size: 26px; margin-bottom: 16px; text-shadow: 0 0 10px rgba(240,160,192,0.3); }
-    p { line-height: 1.5; color: #ccc; margin-bottom: 16px; font-size: 15px; text-align: justify; }
-    .btn { background: linear-gradient(135deg, #5a2a6a, #3a1a4a); border: 1px solid #7a4a8a; color: #fff; padding: 14px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; margin-top: auto; }
-    input { background: #12122a; border: 1px solid #3a3a5a; padding: 14px; border-radius: 12px; color: #fff; font-size: 16px; text-align: center; width: 100%; outline: none; }
+    
+    /* СТЕКЛЯННЫЕ ПАНЕЛИ */
+    .glass-panel {
+      background: rgba(20, 20, 35, 0.4);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      border-radius: 16px;
+    }
+
+    .content-box { padding: 24px; display: flex; flex-direction: column; flex: 1; overflow-y: auto; justify-content: center; margin: 20px; }
+    
+    h1 { color: #00ffff; text-align: center; font-size: 32px; margin-bottom: 16px; text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff; text-transform: uppercase; letter-spacing: 2px; }
+    h3 { color: #ff007f; text-shadow: 0 0 5px #ff007f; font-size: 20px; }
+    p { line-height: 1.5; color: #b0b0d0; margin-bottom: 16px; font-size: 16px; text-align: justify; }
+    
+    .btn { background: linear-gradient(135deg, #ff007f, #7a00ff); border: none; color: #fff; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; text-align: center; margin-top: auto; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 0 15px rgba(255,0,127,0.5); transition: 0.2s; }
+    .btn:hover { transform: scale(1.02); box-shadow: 0 0 25px rgba(255,0,127,0.8); }
+    
+    input { background: rgba(0,0,0,0.5); border: 1px solid rgba(0,255,255,0.3); padding: 14px; border-radius: 12px; color: #00ffff; font-size: 16px; text-align: center; width: 100%; outline: none; font-family: 'Rajdhani'; }
+    input:focus { border-color: #00ffff; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
+
     .class-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
-    .class-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 16px; cursor: pointer; transition: 0.2s; }
-    .class-card:hover { border-color: #5a2a6a; }
-    .class-card h3 { color: #4ade80; font-size: 18px; margin-bottom: 4px; }
-    .class-card p { font-size: 13px; margin: 0; color: #aaa; }
-    #screen-game { display: none; flex-direction: column; height: 100vh; height: 100dvh; z-index: 1; background: #0a0a12; }
+    .class-card { background: rgba(20, 20, 35, 0.6); border: 1px solid rgba(0, 255, 255, 0.2); border-radius: 12px; padding: 16px; cursor: pointer; transition: 0.2s; }
+    .class-card:hover { border-color: #00ffff; box-shadow: 0 0 15px rgba(0,255,255,0.4); }
+    .class-card h3 { color: #00ffff; font-size: 18px; margin-bottom: 4px; text-shadow: none; }
+    .class-card p { font-size: 14px; margin: 0; color: #b0b0d0; }
+
+    #screen-game { display: none; flex-direction: column; height: 100vh; height: 100dvh; z-index: 1; }
     #screen-game.active { display: flex; }
-    .hud { display: flex; justify-content: space-between; padding: 12px; background: #12122a; border-bottom: 1px solid #2a2a4a; }
-    .hud-item { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: #888; }
-    .hud-item .val { font-size: 15px; font-weight: bold; color: #f0e68c; margin-top: 2px; }
-    .hud-item.nickname .val { color: #f0a0c0; cursor: pointer; text-decoration: underline; }
+    
+    /* HUD */
+    .hud { display: flex; justify-content: space-between; padding: 12px; margin: 10px; border-radius: 12px; background: rgba(10, 10, 20, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
+    .hud-item { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+    .hud-item .val { font-size: 16px; font-weight: bold; color: #00ffff; margin-top: 2px; text-shadow: 0 0 5px rgba(0,255,255,0.5); }
+    .hud-item.nickname .val { color: #ff007f; cursor: pointer; text-decoration: none; text-shadow: 0 0 5px rgba(255,0,127,0.5); }
+
     .tabs { display: flex; flex: 1; position: relative; overflow: hidden; }
     .tab-content { position: absolute; inset: 0; padding: 12px; overflow-y: auto; display: none; flex-direction: column; }
     .tab-content.active { display: flex; }
-    .bottom-nav { display: flex; background: #12122a; border-top: 1px solid #2a2a4a; padding-bottom: env(safe-area-inset-bottom); }
-    .nav-btn { flex: 1; padding: 12px 0; text-align: center; font-size: 22px; color: #555; cursor: pointer; transition: 0.2s; }
-    .nav-btn.active { color: #f0a0c0; background: #1a1a3a; border-top: 2px solid #f0a0c0; }
-    .building-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-    .building-card .name { font-weight: bold; font-size: 15px; color: #fff; }
-    .building-card .level { font-size: 12px; color: #888; margin-top: 2px; }
-    .building-card .timer { font-size: 12px; color: #f0a0c0; margin-top: 4px; }
-    .btn-upg { background: #5a2a6a; border: 1px solid #7a4a8a; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
-    .btn-upg:disabled { opacity: 0.5; }
-    .income-card { border-color: #4ade80; background: #0a1a0a; }
-    .income-card .btn-upg { background: #2a6a3a; border-color: #4ade80; }
-    #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; }
-    .chat-msg { font-size: 14px; line-height: 1.4; word-break: break-word; }
-    .chat-msg .from { color: #f0a0c0; font-weight: bold; cursor: pointer; }
+
+    /* НИЖНЕЕ МЕНЮ */
+    .bottom-nav { display: flex; background: rgba(10, 10, 20, 0.8); backdrop-filter: blur(15px); border-top: 1px solid rgba(255,255,255,0.1); padding-bottom: env(safe-area-inset-bottom); }
+    .nav-btn { flex: 1; padding: 14px 0; text-align: center; font-size: 24px; color: #555; cursor: pointer; transition: 0.2s; }
+    .nav-btn.active { color: #ff007f; text-shadow: 0 0 10px #ff007f; border-top: 2px solid #ff007f; background: rgba(255,0,127,0.05); }
+
+    /* КАРТОЧКИ */
+    .building-card { background: rgba(20, 20, 35, 0.6); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+    .building-card .name { font-weight: bold; font-size: 16px; color: #fff; }
+    .building-card .level { font-size: 12px; color: #00ffff; margin-top: 2px; }
+    .building-card .timer { font-size: 13px; color: #ff007f; margin-top: 4px; font-weight: bold; }
+    .btn-upg { background: rgba(0, 255, 255, 0.1); border: 1px solid #00ffff; color: #00ffff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s; }
+    .btn-upg:hover { background: #00ffff; color: #000; box-shadow: 0 0 15px rgba(0,255,255,0.5); }
+    .btn-upg:disabled { opacity: 0.3; border-color: #555; color: #888; background: transparent; cursor: not-allowed; }
+    
+    .income-card { border-color: #4ade80; background: rgba(74, 222, 128, 0.05); }
+    .income-card .btn-upg { border-color: #4ade80; color: #4ade80; }
+    .income-card .btn-upg:hover { background: #4ade80; color: #000; box-shadow: 0 0 15px rgba(74,222,128,0.5); }
+
+    /* ЧАТ */
+    #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
+    .chat-msg { font-size: 15px; line-height: 1.4; word-break: break-word; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 8px; }
+    .chat-msg .from { color: #ff007f; font-weight: bold; cursor: pointer; }
     .chat-msg .text { color: #ddd; }
-    .chat-input-row { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid #2a2a4a; }
+    .chat-input-row { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
     .chat-input-row input { flex: 1; padding: 10px; text-align: left; }
-    .chat-input-row button { background: #5a2a6a; color: #fff; border: none; border-radius: 8px; padding: 0 16px; font-weight: bold; }
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 50; display: none; justify-content: center; align-items: center; padding: 20px; }
+    .chat-input-row button { background: #ff007f; color: #fff; border: none; border-radius: 8px; padding: 0 20px; font-weight: bold; cursor: pointer; }
+
+    /* МОДАЛКИ */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 50; display: none; justify-content: center; align-items: center; padding: 20px; backdrop-filter: blur(5px); }
     .modal.active { display: flex; }
-    .modal-box { background: #12122a; border: 1px solid #5a3a6a; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; position: relative; max-height: 80vh; overflow-y: auto; }
-    .modal-box h2 { color: #f0a0c0; margin-bottom: 16px; }
-    .close-btn { position: absolute; top: 12px; right: 16px; font-size: 24px; color: #888; background: none; border: none; cursor: pointer; }
+    .modal-box { background: rgba(20, 20, 35, 0.8); border: 1px solid rgba(0, 255, 255, 0.3); box-shadow: 0 0 30px rgba(0, 255, 255, 0.1); border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; position: relative; max-height: 80vh; overflow-y: auto; }
+    .modal-box h2 { color: #00ffff; margin-bottom: 20px; text-transform: uppercase; text-shadow: 0 0 10px rgba(0,255,255,0.5); }
+    .close-btn { position: absolute; top: 12px; right: 16px; font-size: 24px; color: #ff007f; background: none; border: none; cursor: pointer; }
+
+    /* ТОСТЫ */
     #toasts { position: fixed; top: 10px; left: 10px; right: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-    .toast { background: #1a1a3a; border-left: 4px solid #f0a0c0; color: #fff; padding: 12px; border-radius: 6px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; }
-    .toast.error { border-color: #a04040; }
+    .toast { background: rgba(20, 20, 35, 0.9); border-left: 4px solid #00ffff; color: #fff; padding: 12px; border-radius: 6px; font-size: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; backdrop-filter: blur(10px); }
+    .toast.error { border-color: #ff007f; }
     .toast.success { border-color: #4ade80; }
     @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .shop-item { display: flex; justify-content: space-between; align-items: center; background: #1a1a3a; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
-    .shop-item button { background: #4ade80; color: #000; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; }
-    .quest-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
-    .quest-title { font-weight: bold; color: #fff; font-size: 15px; margin-bottom: 4px; }
-    .quest-desc { font-size: 13px; color: #aaa; margin-bottom: 8px; }
-    .quest-reward { font-size: 13px; color: #4ade80; font-weight: bold; margin-bottom: 8px; }
-    .btn-claim { background: #4ade80; color: #000; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
-    .btn-claim:disabled { background: #2a2a4a; color: #666; cursor: not-allowed; }
-    .list-item { background: #1a1a3a; padding: 10px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
-    .btn-action { background: #4ade80; color: #000; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-    .roulette-btn { background: linear-gradient(135deg, #f0a0c0, #a04040); color: #fff; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; cursor: pointer; margin-bottom: 15px; border: 2px solid #fff; }
+
+    .shop-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.05); }
+    .shop-item button { background: #00ffff; color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    
+    .quest-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+    .quest-title { font-weight: bold; color: #00ffff; font-size: 16px; margin-bottom: 4px; }
+    .quest-desc { font-size: 14px; color: #aaa; margin-bottom: 8px; }
+    .quest-reward { font-size: 14px; color: #4ade80; font-weight: bold; margin-bottom: 8px; }
+    .btn-claim { background: #4ade80; color: #000; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; }
+    .btn-claim:disabled { background: #333; color: #666; cursor: not-allowed; }
+    
+    .list-item { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; border: 1px solid rgba(255,255,255,0.05); }
+    .btn-action { background: #00ffff; color: #000; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+
+    /* РУЛЕТКА */
+    .roulette-btn { background: linear-gradient(135deg, #ff007f, #7a00ff); color: #fff; padding: 15px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 18px; cursor: pointer; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 0 20px rgba(255,0,127,0.4); transition: 0.2s; text-transform: uppercase; letter-spacing: 1px; }
+    .roulette-btn:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(255,0,127,0.7); }
+    
+    .spin-anim { animation: spinRoulette 0.2s linear infinite; display: inline-block; }
+    @keyframes spinRoulette { 0% { transform: translateY(0); } 50% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
   </style>
 </head>
 <body>
 
   <div id="screen-loading" class="screen active"><h1>НЭО-ЭДО</h1><div class="spinner"></div></div>
-  <div id="screen-login" class="screen"><div class="content-box"><h1>Пепел Сакуры</h1><input type="text" id="nick-input" placeholder="Ваш никнейм" maxlength="16" autocomplete="off"><button class="btn" id="btn-login" style="margin-top:20px;">Подключиться</button></div></div>
-  <div id="screen-lore" class="screen"><div class="content-box"><h1>Год 2142</h1><p>Империя пала. Неоновые вывески корпораций заменили солнечный свет. Клан «Пепел Сакуры» — последний оплот свободы.</p><button class="btn" id="btn-to-classes">Принять судьбу</button></div></div>
   
+  <div id="screen-login" class="screen">
+    <div class="content-box glass-panel">
+      <h1>Пепел Сакуры</h1>
+      <p style="text-align:center; margin-bottom:30px; color:#00ffff;">Введите ваше имя, странник</p>
+      <input type="text" id="nick-input" placeholder="Никнейм" maxlength="16" autocomplete="off">
+      <button class="btn" id="btn-login" style="margin-top:20px;">Подключиться</button>
+    </div>
+  </div>
+
+  <div id="screen-lore" class="screen">
+    <div class="content-box glass-panel">
+      <h1>Год 2142</h1>
+      <p>Империя пала. Неоновые вывески корпораций заменили солнечный свет. Древние храмы стали серверными стойками.</p>
+      <p>Клан «Пепел Сакуры» — последний оплот свободы в мегаполисе НЭО-ЭДО. Вы — избранный, чей разум был оцифрован и пробужден.</p>
+      <button class="btn" id="btn-to-classes">Принять судьбу</button>
+    </div>
+  </div>
+
   <div id="screen-classes" class="screen">
-    <div class="content-box">
-      <h1 style="margin-bottom:10px;">Выберите путь</h1>
+    <div class="content-box glass-panel">
+      <h1 style="margin-bottom:20px;">Выберите путь</h1>
       <div class="class-grid">
-        <div class="class-card" onclick="selectClass('samurai', this)"><h3>⚔️ Кибер-Самурай</h3><p>Начинает с Кузницей 2 ур.</p></div>
-        <div class="class-card" onclick="selectClass('monk', this)"><h3>⛩️ Техно-Монах</h3><p>+50 к макс. энергии.</p></div>
-        <div class="class-card" onclick="selectClass('merchant', this)"><h3>💼 Торговец</h3><p>+500 кредитов.</p></div>
+        <div class="class-card" onclick="selectClass('samurai', this)">
+          <h3>⚔️ Кибер-Самурай</h3>
+          <p>Начинает с Кузницей 2 ур.</p>
+        </div>
+        <div class="class-card" onclick="selectClass('monk', this)">
+          <h3>⛩️ Техно-Монах</h3>
+          <p>+50 к макс. энергии.</p>
+        </div>
+        <div class="class-card" onclick="selectClass('merchant', this)">
+          <h3>💼 Торговец</h3>
+          <p>+500 кредитов на старте.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -98,58 +179,76 @@
     </div>
 
     <div class="tabs">
+      <!-- ГОРОД -->
       <div id="tab-city" class="tab-content active">
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-          <h3 style="color:#f0a0c0;">Город</h3>
-          <button class="btn-upg" onclick="toggleShop()" style="padding:4px 10px; font-size:12px;">🛍️ Магазин</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+          <h3>Город</h3>
+          <button class="btn-upg" onclick="toggleShop()" style="padding:6px 12px; font-size:12px;">🛍️ Магазин</button>
         </div>
-        <div class="roulette-btn" onclick="spinRoulette()">🎰 Рулетка удачи (200💰)</div>
+        <div class="roulette-btn" onclick="spinRoulette()">🎰 Крутить рулетку (200💰)</div>
         <div id="buildings-list"></div>
       </div>
+
+      <!-- ЧАТ -->
       <div id="tab-chat" class="tab-content">
         <div id="chat-messages"></div>
-        <div class="chat-input-row"><input type="text" id="chat-input" placeholder="Сообщение..." maxlength="100"><button id="chat-send">➤</button></div>
+        <div class="chat-input-row"><input type="text" id="chat-input" placeholder="Сообщение в эфир..." maxlength="100"><button id="chat-send">➤</button></div>
       </div>
-      <div id="tab-quests" class="tab-content"><h3 style="color:#f0a0c0; margin-bottom:10px;">Задания</h3><div id="quests-list"></div></div>
+
+      <!-- КВЕСТЫ -->
+      <div id="tab-quests" class="tab-content">
+        <h3 style="margin-bottom:15px;">Задания</h3>
+        <div id="quests-list"></div>
+      </div>
+
+      <!-- ДРУЗЬЯ -->
       <div id="tab-friends" class="tab-content">
-        <h3 style="color:#f0a0c0; margin-bottom:10px;">Друзья</h3>
-        <div style="display:flex; gap:8px; margin-bottom:15px;">
-          <input type="text" id="friend-id-input" placeholder="ID друга" style="text-align:left; padding:8px;">
-          <button class="btn-action" onclick="addFriend()">Добавить</button>
+        <h3 style="margin-bottom:15px;">Друзья</h3>
+        <div style="display:flex; gap:8px; margin-bottom:20px;">
+          <input type="text" id="friend-id-input" placeholder="ID друга (напр. A1B2C3)" style="text-align:left; padding:10px;">
+          <button class="btn-upg" onclick="addFriend()">Найти</button>
         </div>
-        <h4 style="color:#fff; margin-bottom:5px;">Заявки в друзья:</h4><div id="friend-requests-list" style="margin-bottom:15px;"></div>
-        <h4 style="color:#fff; margin-bottom:5px;">Мои друзья:</h4><div id="friends-list"></div>
-        <h4 style="color:#fff; margin-bottom:5px; margin-top:15px;">Приглашения в гильдию:</h4><div id="guild-invites-list"></div>
+        <h4 style="color:#00ffff; margin-bottom:8px;">Заявки:</h4><div id="friend-requests-list" style="margin-bottom:20px;"></div>
+        <h4 style="color:#00ffff; margin-bottom:8px;">Мои друзья:</h4><div id="friends-list"></div>
+        <h4 style="color:#00ffff; margin-bottom:8px; margin-top:20px;">Приглашения в гильдию:</h4><div id="guild-invites-list"></div>
       </div>
+
+      <!-- ГИЛЬДИЯ -->
       <div id="tab-guild" class="tab-content">
-        <h3 style="color:#f0a0c0; margin-bottom:10px;">Гильдия</h3>
+        <h3 style="margin-bottom:15px;">Гильдия</h3>
+        
         <div id="guild-main-view">
-          <div id="guild-info" style="margin-bottom:10px; font-size:14px; color:#aaa;">Вы не в гильдии</div>
-          <div id="guild-create-form" style="margin-bottom:20px;">
-            <input type="text" id="guild-name-input" placeholder="Название" style="margin-bottom:10px;">
-            <button class="btn-upg" style="width:100%;" onclick="createGuild()">Создать (500💰)</button>
+          <div id="guild-info" style="margin-bottom:15px; font-size:15px; color:#aaa;">Вы не состоите в гильдии</div>
+          <div id="guild-create-form" class="glass-panel" style="padding:15px; margin-bottom:20px;">
+            <input type="text" id="guild-name-input" placeholder="Название гильдии" style="margin-bottom:10px;">
+            <button class="btn-upg" style="width:100%; padding:12px;" onclick="createGuild()">Создать (500💰)</button>
           </div>
-          <h4 style="color:#fff; margin-bottom:10px;">Топ гильдий:</h4>
+          <h4 style="color:#00ffff; margin-bottom:10px;">Топ гильдий:</h4>
           <div id="all-guilds-list"></div>
         </div>
+
         <div id="guild-member-view" style="display:none;">
-          <div id="guild-info-active" style="margin-bottom:10px; font-size:14px; color:#4ade80; font-weight:bold;"></div>
-          <div id="guild-help-section" style="display:none; margin-bottom:15px; background:#1a2a1a; border:1px solid #4ade80; padding:10px; border-radius:8px;">
-            <h4 style="color:#4ade80; margin-bottom:5px;">Запросы помощи:</h4>
+          <div id="guild-info-active" style="margin-bottom:15px; font-size:18px; color:#ff007f; font-weight:bold; text-shadow: 0 0 10px rgba(255,0,127,0.5);"></div>
+          
+          <div id="guild-help-section" class="glass-panel" style="display:none; margin-bottom:15px; padding:15px;">
+            <h4 style="color:#4ade80; margin-bottom:10px;">Запросы помощи:</h4>
             <div id="guild-help-list"></div>
           </div>
-          <div id="guild-invite-form" style="display:none; margin-bottom:15px; background:#1a1a3a; padding:10px; border-radius:8px;">
-            <p style="font-size:12px; margin-bottom:5px;">Пригласить по ID:</p>
+          
+          <div id="guild-invite-form" class="glass-panel" style="display:none; margin-bottom:15px; padding:15px;">
+            <p style="font-size:13px; margin-bottom:8px; color:#00ffff;">Пригласить по ID:</p>
             <div style="display:flex; gap:8px;">
-              <input type="text" id="guild-invite-id" placeholder="ID игрока" style="padding:8px; text-align:left;">
-              <button class="btn-upg" onclick="inviteToGuild()" style="padding:8px;">Пригласить</button>
+              <input type="text" id="guild-invite-id" placeholder="ID игрока" style="padding:10px; text-align:left;">
+              <button class="btn-upg" onclick="inviteToGuild()">Пригласить</button>
             </div>
           </div>
-          <div id="leader-requests-section" style="display:none; margin-bottom:15px;">
-            <h4 style="color:#f0a0c0; margin-bottom:5px;">Заявки на вступление:</h4>
+          
+          <div id="leader-requests-section" style="display:none; margin-bottom:20px;">
+            <h4 style="color:#ff007f; margin-bottom:8px;">Заявки на вступление:</h4>
             <div id="leader-requests-list"></div>
           </div>
-          <h4 style="color:#fff; margin-bottom:5px;">Участники:</h4>
+
+          <h4 style="color:#00ffff; margin-bottom:10px;">Участники:</h4>
           <div id="guild-members-list"></div>
         </div>
       </div>
@@ -164,17 +263,18 @@
     </div>
   </div>
 
+  <!-- МОДАЛКИ -->
   <div id="modal-profile" class="modal">
     <div class="modal-box">
       <button class="close-btn" onclick="closeModal('modal-profile')">×</button>
       <h2 id="profile-title">Профиль</h2>
-      <div id="profile-content" style="font-size:14px; line-height:1.6; margin-bottom: 15px;"></div>
-      <div id="daily-section" style="display:none; margin-bottom: 15px;"><button class="btn-claim" onclick="claimDaily()">🎁 Ежедневная награда</button></div>
-      <div id="promo-section" style="border-top: 1px solid #2a2a4a; padding-top: 15px;">
+      <div id="profile-content" style="font-size:15px; line-height:1.8; margin-bottom: 20px;"></div>
+      <div id="daily-section" style="display:none; margin-bottom: 20px;"><button class="btn-claim" onclick="claimDaily()">🎁 Ежедневная награда</button></div>
+      <div id="promo-section" style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
         <p style="margin-bottom: 8px; font-size: 14px; color: #aaa;">Промокод:</p>
         <div style="display:flex; gap:8px;">
-          <input type="text" id="promo-input" placeholder="Код" style="padding: 8px; text-align:left;">
-          <button class="btn-upg" onclick="redeemPromo()" style="background:#4ade80; color:#000;">ОК</button>
+          <input type="text" id="promo-input" placeholder="Код" style="padding: 10px; text-align:left;">
+          <button class="btn-upg" onclick="redeemPromo()" style="background:#4ade80; color:#000; border:none;">ОК</button>
         </div>
       </div>
     </div>
@@ -183,7 +283,7 @@
   <div id="modal-shop" class="modal">
     <div class="modal-box">
       <button class="close-btn" onclick="closeModal('modal-shop')">×</button>
-      <h2>🛍️ Магазин</h2>
+      <h2>Магазин</h2>
       <div class="shop-item"><div><b>+50 Энергии</b></div><button onclick="buyItem('energy')">💎 5</button></div>
       <div class="shop-item"><div><b>+1000 Кредитов</b></div><button onclick="buyItem('credits')">💎 10</button></div>
       <div class="shop-item"><div><b>Мгновенная стройка</b></div><button onclick="buyItem('instantBuild')">💎 15</button></div>
@@ -193,15 +293,15 @@
   <div id="modal-roulette" class="modal">
     <div class="modal-box" style="text-align:center;">
       <h2>🎰 Рулетка</h2>
-      <div id="roulette-anim" style="font-size:50px; margin:20px 0;">❓</div>
+      <div id="roulette-anim" style="font-size:60px; margin:30px 0; color:#00ffff; text-shadow: 0 0 20px #00ffff;">❓</div>
       <button class="btn-claim" id="roulette-close-btn" onclick="closeModal('modal-roulette')" style="display:none;">Забрать</button>
     </div>
   </div>
 
   <div id="modal-offline" class="modal">
     <div class="modal-box" style="text-align:center;">
-      <h2>Добро пожаловать!</h2>
-      <p id="offline-text" style="font-size:16px; margin:20px 0;"></p>
+      <h2>С возвращением!</h2>
+      <p id="offline-text" style="font-size:16px; margin:20px 0; color:#4ade80;"></p>
       <button class="btn-claim" onclick="closeModal('modal-offline')">Забрать</button>
     </div>
   </div>
@@ -235,7 +335,7 @@
         startGame();
         if (data.guild) socket.emit('guildUpdated', data.guild);
         if (data.offlineEarnings > 0) {
-          document.getElementById('offline-text').textContent = `Пока вас не было: +${formatNumber(data.offlineEarnings)} 💰`;
+          document.getElementById('offline-text').textContent = `Пока вас не было, здания принесли: +${formatNumber(data.offlineEarnings)} 💰`;
           document.getElementById('modal-offline').classList.add('active');
         }
       }
@@ -243,16 +343,12 @@
 
     document.getElementById('btn-to-classes').onclick = () => showScreen('screen-classes');
     
-    // ЗАЩИТА ОТ ЗАВИСАНИЯ ПРИ ВЫБОРЕ КЛАССА
     window.selectClass = (cls, el) => {
-      if (el) el.innerHTML = '<h3 style="color:#fff; text-align:center;">Загрузка...</h3><p style="text-align:center;">Ожидание сервера</p>';
+      if (el) el.innerHTML = '<h3 style="color:#00ffff; text-align:center;">Инициализация...</h3>';
       socket.emit('setClass', cls);
     };
     
-    socket.on('classUpdated', (player) => { 
-      myPlayer = player; 
-      startGame(); 
-    });
+    socket.on('classUpdated', (player) => { myPlayer = player; startGame(); });
 
     function startGame() {
       showScreen('screen-game'); socket.emit('setOnline', myNickname);
@@ -281,20 +377,27 @@
       if (tabName === 'guild') { socket.emit('getAllGuilds'); socket.emit('getLeaderRequests'); }
     };
 
+    // --- РУЛЕТКА С АНИМАЦИЕЙ ---
     window.spinRoulette = () => {
       document.getElementById('modal-roulette').classList.add('active');
-      document.getElementById('roulette-anim').textContent = '🎲';
+      const animEl = document.getElementById('roulette-anim');
+      animEl.textContent = '🎲';
+      animEl.className = 'spin-anim'; // Включаем CSS анимацию
       document.getElementById('roulette-close-btn').style.display = 'none';
       socket.emit('spinRoulette');
     };
     socket.on('rouletteResult', (data) => {
       myPlayer = data.player; updateHUD();
       setTimeout(() => {
-        document.getElementById('roulette-anim').textContent = data.rewardText;
+        const animEl = document.getElementById('roulette-anim');
+        animEl.className = ''; // Выключаем анимацию
+        animEl.style.fontSize = '30px';
+        animEl.textContent = data.rewardText;
         document.getElementById('roulette-close-btn').style.display = 'block';
-      }, 1000);
+      }, 1500); // Крутим 1.5 секунды
     });
 
+    // --- ПОСТРОЙКИ ---
     const BUILDING_NAMES = { house: '🏠 Дом', forge: '🔨 Кузница', shrine: '⛩️ Святилище', datacenter: '🖥️ Дата-центр' };
     function initBuildingsDOM() {
       const container = document.getElementById('buildings-list');
@@ -305,7 +408,7 @@
       container.appendChild(inc);
       for (const id in BUILDING_NAMES) {
         const card = document.createElement('div'); card.className = 'building-card'; card.dataset.id = id;
-        card.innerHTML = `<div class="info"><div class="name">${BUILDING_NAMES[id]}</div><div class="level">Ур. <span class="lvl-val"></span></div><div class="timer"></div><div class="help-text" style="font-size:10px; color:#4ade80;"></div></div><button class="btn-upg" onclick="socket.emit('upgradeBuilding', '${id}')">Улучшить</button>`;
+        card.innerHTML = `<div class="info"><div class="name">${BUILDING_NAMES[id]}</div><div class="level">Ур. <span class="lvl-val"></span></div><div class="timer"></div><div class="help-text" style="font-size:12px; color:#4ade80; margin-top:4px;"></div></div><button class="btn-upg" onclick="socket.emit('upgradeBuilding', '${id}')">Улучшить</button>`;
         container.appendChild(card);
       }
     }
@@ -343,18 +446,23 @@
 
     socket.on('guildHelpRequested', (data) => {
       if (data.nickname !== myNickname) {
-        showToast(`${data.nickname} просит помощи в строительстве!`, 'info');
+        showToast(`${data.nickname} просит помощи!`, 'info');
         document.getElementById('guild-help-section').style.display = 'block';
         const list = document.getElementById('guild-help-list');
-        list.innerHTML += `<div class="list-item"><span>${data.nickname} (${BUILDING_NAMES[data.buildingId]})</span><button class="btn-action" onclick="helpMember('${data.nickname}', '${data.buildingId}')">Помочь</button></div>`;
+        // Проверка, чтобы не дублировать
+        if (!document.getElementById(`help-btn-${data.nickname}-${data.buildingId}`)) {
+            list.innerHTML += `<div class="list-item" id="help-btn-${data.nickname}-${data.buildingId}"><span>${data.nickname} (${BUILDING_NAMES[data.buildingId]})</span><button class="btn-action" onclick="helpMember('${data.nickname}', '${data.buildingId}')">Помочь</button></div>`;
+        }
       }
     });
 
     window.helpMember = (nick, bid) => {
       socket.emit('helpGuildMember', { nickname: nick, buildingId: bid });
-      document.getElementById('guild-help-list').innerHTML = ''; 
+      const el = document.getElementById(`help-btn-${nick}-${bid}`);
+      if (el) el.remove();
     };
 
+    // --- ЧАТ ---
     socket.on('chatHistory', (history) => { document.getElementById('chat-messages').innerHTML = ''; history.forEach(addChatMessage); });
     socket.on('chatMessage', addChatMessage);
     function addChatMessage(msg) {
@@ -369,6 +477,7 @@
     document.getElementById('chat-input').onkeypress = (e) => { if (e.key === 'Enter') document.getElementById('chat-send').click(); };
     function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 
+    // --- КВЕСТЫ ---
     function renderQuests() {
       const container = document.getElementById('quests-list');
       if (container.children.length > 0) return;
@@ -392,8 +501,9 @@
     window.claimQuest = (id) => socket.emit('claimQuest', id);
     socket.on('questClaimed', (data) => { myPlayer = data.player; updateHUD(); updateQuestsUI(); showToast('Награда получена!', 'success'); });
 
+    // --- ГИЛЬДИЯ ---
     socket.on('allGuildsList', (list) => {
-      let html = list.length === 0 ? '<p style="font-size:12px; color:#888;">Пока нет гильдий</p>' : '';
+      let html = list.length === 0 ? '<p style="font-size:14px; color:#888;">Пока нет гильдий</p>' : '';
       list.forEach(g => { html += `<div class="list-item"><div><b>${g.name}</b><br><small>Лидер: ${g.leader} | Людей: ${g.members}</small></div><button class="btn-action" onclick="requestJoinGuild('${g.id}')">Вступить</button></div>`; });
       document.getElementById('all-guilds-list').innerHTML = html;
     });
@@ -402,6 +512,11 @@
     window.inviteToGuild = () => { const id = document.getElementById('guild-invite-id').value.trim().toUpperCase(); if (id) socket.emit('inviteToGuild', id); };
     window.acceptGuildInvite = (id) => socket.emit('acceptGuildInvite', id);
     window.acceptJoinRequest = (guildId, nick) => socket.emit('acceptJoinRequest', { guildId, nickname: nick });
+    
+    // Управление участниками
+    window.promoteMember = (guildId, nick) => socket.emit('promoteMember', { guildId, nickname: nick });
+    window.demoteMember = (guildId, nick) => socket.emit('demoteMember', { guildId, nickname: nick });
+    window.kickMember = (guildId, nick) => socket.emit('kickMember', { guildId, nickname: nick });
 
     socket.on('guildUpdated', (guild) => {
       if (!guild) return;
@@ -409,17 +524,30 @@
       document.getElementById('guild-member-view').style.display = 'block';
       document.getElementById('guild-info-active').textContent = `Гильдия: ${guild.name}`;
       
-      if (myPlayer && guild.members[myPlayer.nickname] === 'leader') {
+      const isLeader = myPlayer && guild.members[myPlayer.nickname] === 'leader';
+      if (isLeader) {
         document.getElementById('guild-invite-form').style.display = 'block';
         document.getElementById('leader-requests-section').style.display = 'block';
         socket.emit('getLeaderRequests');
       }
 
       let html = '';
-      for (const nick in guild.members) html += `<div class="list-item" onclick="openProfile('${nick}')"><span>${nick}</span><span>${guild.members[nick]}</span></div>`;
-      document.getElementById('guild-members-list').innerHTML = html;
+      const roleNames = { leader: 'Лидер', general: 'Генерал', officer: 'Офицер', private: 'Рядовой' };
       
-      if (guild.requests && guild.requests.length > 0) document.getElementById('guild-help-section').style.display = 'block';
+      for (const nick in guild.members) {
+        const role = guild.members[nick];
+        html += `<div class="list-item"><div><span onclick="openProfile('${nick}')" style="cursor:pointer; color:#00ffff;">${nick}</span> <br><small style="color:#888;">${roleNames[role]}</small></div>`;
+        
+        if (isLeader && nick !== myNickname) {
+          html += `<div style="display:flex; gap:5px;">
+            <button class="btn-action" style="background:#00ffff; padding:4px 8px;" onclick="promoteMember('${guild.id}', '${nick}')">⬆</button>
+            <button class="btn-action" style="background:#ff007f; padding:4px 8px;" onclick="demoteMember('${guild.id}', '${nick}')">⬇</button>
+            <button class="btn-action" style="background:#a04040; padding:4px 8px; color:#fff;" onclick="kickMember('${guild.id}', '${nick}')">✕</button>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+      document.getElementById('guild-members-list').innerHTML = html;
     });
 
     socket.on('leaderRequestsList', (requests) => {
@@ -428,9 +556,16 @@
       document.getElementById('leader-requests-list').innerHTML = html;
     });
 
-    socket.on('guildRequestReceived', (data) => { if (myNickname === data.leader) { socket.emit('getLeaderRequests'); showToast('Новая заявка в гильдию!', 'info'); } });
+    socket.on('guildRequestReceived', (data) => { if (myNickname === data.leader) { socket.emit('getLeaderRequests'); showToast('Новая заявка!', 'info'); } });
     socket.on('guildMemberJoined', (data) => { if (myPlayer && myPlayer.guildId === data.guildId) socket.emit('getMyGuild'); });
-    
+    socket.on('kickedFromGuild', () => { 
+      myPlayer.guildId = null; myPlayer.guildRole = null; 
+      document.getElementById('guild-main-view').style.display = 'block';
+      document.getElementById('guild-member-view').style.display = 'none';
+      showToast('Вас исключили из гильдии', 'error');
+    });
+
+    // --- ДРУЗЬЯ / ПРОФИЛЬ / МАГАЗИН ---
     window.addFriend = () => { const id = document.getElementById('friend-id-input').value.trim().toUpperCase(); if (id) socket.emit('addFriend', id); };
     window.acceptFriend = (id) => socket.emit('acceptFriend', id);
     socket.on('friendsData', (data) => {
@@ -438,7 +573,7 @@
       data.requests.forEach(r => { reqHtml += `<div class="list-item"><span>${r.nickname}</span><button class="btn-action" onclick="acceptFriend('${r.id}')">Принять</button></div>`; });
       document.getElementById('friend-requests-list').innerHTML = reqHtml;
       let friendsHtml = data.friends.length === 0 ? '<p style="font-size:12px; color:#888;">Список пуст</p>' : '';
-      data.friends.forEach(f => { friendsHtml += `<div class="list-item" onclick="openProfile('${f.nickname}')"><span>${f.nickname}</span><span style="font-size:10px; color:#888;">${f.id}</span></div>`; });
+      data.friends.forEach(f => { friendsHtml += `<div class="list-item" onclick="openProfile('${f.nickname}')"><span style="color:#00ffff;">${f.nickname}</span><span style="font-size:10px; color:#888;">${f.id}</span></div>`; });
       document.getElementById('friends-list').innerHTML = friendsHtml;
       let invHtml = data.invites.length === 0 ? '<p style="font-size:12px; color:#888;">Нет приглашений</p>' : '';
       data.invites.forEach(i => { invHtml += `<div class="list-item"><span>Гильдия: ${i.name}</span><button class="btn-action" onclick="acceptGuildInvite('${i.id}')">Вступить</button></div>`; });
