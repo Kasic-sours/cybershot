@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>НЭО-ЭДО: Пепел Сакуры</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; font-family: system-ui, sans-serif; background: #0a0a12; color: #e0e0e0; touch-action: manipulation; }
+    #orientation-lock { display: none; position: fixed; inset: 0; z-index: 10000; background: #0a0a12; justify-content: center; align-items: center; flex-direction: column; gap: 20px; text-align: center; padding: 20px; }
+    @media (orientation: portrait) { #orientation-lock { display: flex; } #game-container { display: none !important; } }
+    #orientation-lock .icon { font-size: 64px; animation: rotatePhone 1.5s infinite; }
+    @keyframes rotatePhone { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 50% { transform: rotate(90deg); } 75% { transform: rotate(0deg); } 100% { transform: rotate(0deg); } }
+    
+    #update-overlay { display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.92); justify-content: center; align-items: center; flex-direction: column; gap: 16px; text-align: center; padding: 20px; }
+    #update-overlay.active { display: flex; }
+    #update-overlay h2 { color: #f0a0c0; font-size: 24px; }
+    .spinner { width: 40px; height: 40px; border: 4px solid rgba(240,160,192,0.3); border-top-color: #f0a0c0; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #game-container { display: flex; flex-direction: column; height: 100vh; max-width: 1400px; margin: 0 auto; padding: 8px; }
+    .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 12px; border: 1px solid #2a2a4a; flex-shrink: 0; margin-bottom: 8px; }
+    .header .resources { display: flex; gap: 16px; font-size: 14px; }
+    .header .resource-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .header .resource-item .value { font-weight: 600; color: #f0e68c; min-width: 40px; }
+    .header .nickname { font-weight: 600; color: #f0a0c0; font-size: 14px; }
+    .header .level-badge { background: #2a1a3a; padding: 2px 10px; border-radius: 20px; font-size: 12px; border: 1px solid #5a3a6a; }
+
+    .main-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
+    @media (max-width: 800px) { .main-grid { grid-template-columns: 1fr 1fr; } .panel-guild { grid-column: span 2; } }
+    @media (max-width: 550px) { .main-grid { grid-template-columns: 1fr; } .panel-guild { grid-column: span 1; } }
+
+    .panel { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+    .panel h3 { font-size: 14px; text-transform: uppercase; color: #f0a0c0; margin-bottom: 8px; flex-shrink: 0; border-bottom: 1px solid #2a2a4a; padding-bottom: 6px; }
+    .panel .scroll-area { flex: 1; overflow-y: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: #3a3a5a transparent; }
+    .panel .scroll-area::-webkit-scrollbar { width: 4px; }
+    .panel .scroll-area::-webkit-scrollbar-thumb { background: #3a3a5a; border-radius: 2px; }
+
+    .building-card { background: #1a1a3a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .building-card .info { flex: 1; }
+    .building-card .name { font-weight: 600; font-size: 13px; }
+    .building-card .level { font-size: 11px; color: #888; }
+    .building-card .timer { font-size: 12px; color: #f0a0c0; }
+    .building-card button { background: linear-gradient(135deg, #5a2a6a, #3a1a4a); color: #f0e0f0; border: 1px solid #7a4a8a; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+    .building-card button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .chat-messages { font-size: 12px; }
+    .chat-msg { margin-bottom: 4px; word-break: break-word; }
+    .chat-msg .from { color: #f0a0c0; font-weight: 600; cursor: pointer; }
+    .chat-msg .text { color: #ccc; }
+    .chat-input-row { display: flex; gap: 6px; margin-top: 6px; flex-shrink: 0; }
+    .chat-input-row input { flex: 1; background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 6px 10px; color: #e0e0e0; font-size: 12px; }
+    .chat-input-row button { background: #5a2a6a; border: 1px solid #7a4a8a; border-radius: 6px; color: #f0e0f0; padding: 6px 14px; font-size: 12px; cursor: pointer; }
+
+    .guild-create { display: flex; gap: 6px; margin-bottom: 8px; }
+    .guild-create input { flex: 1; background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 6px; color: #e0e0e0; font-size: 12px; }
+    .guild-create button { background: #5a2a6a; border: 1px solid #7a4a8a; border-radius: 6px; color: #f0e0f0; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+    .guild-member-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; font-size: 12px; }
+    .guild-member-row .actions button { background: transparent; border: 1px solid #3a3a5a; border-radius: 4px; color: #ccc; font-size: 10px; padding: 2px 6px; cursor: pointer; }
+
+    #toast-container { position: fixed; top: 12px; right: 12px; z-index: 10001; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast { background: #1a1a3a; border: 1px solid #5a3a6a; border-radius: 8px; padding: 10px 16px; color: #f0e0f0; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); animation: slideIn 0.3s ease-out; pointer-events: auto; max-width: 300px; }
+    .toast.error { border-color: #a04040; background: #2a1a1a; }
+    .toast.success { border-color: #40a060; background: #1a2a1a; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    #profile-modal { display: none; position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
+    #profile-modal.active { display: flex; }
+    #profile-modal .modal-content { background: #12122a; border: 1px solid #5a3a6a; border-radius: 16px; padding: 24px; min-width: 280px; max-width: 400px; position: relative; }
+    #profile-modal .close-btn { position: absolute; top: 8px; right: 12px; background: none; border: none; color: #888; font-size: 24px; cursor: pointer; }
+    #profile-modal h2 { color: #f0a0c0; margin-bottom: 12px; }
+    #profile-modal .profile-row { margin-bottom: 6px; font-size: 14px; }
+    #profile-modal .profile-row .label { color: #888; }
+
+    #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 16px; padding: 20px; }
+    #login-screen h1 { font-size: 28px; color: #f0a0c0; text-align: center; }
+    #login-screen input { background: #0a0a1a; border: 1px solid #3a3a5a; border-radius: 10px; padding: 12px 20px; color: #e0e0e0; font-size: 16px; outline: none; width: 260px; text-align: center; }
+    #login-screen button { background: linear-gradient(135deg, #5a2a6a, #3a1a4a); border: 1px solid #7a4a8a; border-radius: 10px; color: #f0e0f0; padding: 12px 40px; font-size: 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="orientation-lock">
+    <div class="icon">📱</div>
+    <h2>Поверните телефон</h2>
+    <p>Игра работает только в горизонтальной ориентации</p>
+  </div>
+
+  <div id="update-overlay">
+    <div class="spinner"></div>
+    <h2>Доступно обновление!</h2>
+    <p>Загрузка новой версии...</p>
+  </div>
+
+  <div id="game-container" style="display:none;">
+    <div class="header">
+      <div class="resources">
+        <div class="resource-item"><span>💰</span><span class="value" id="hud-credits">0</span></div>
+        <div class="resource-item"><span>⚡</span><span class="value" id="hud-energy">0</span></div>
+        <div class="resource-item"><span>💎</span><span class="value" id="hud-shards">0</span></div>
+      </div>
+      <div class="nickname" id="hud-nickname">—</div>
+      <div class="level-badge" id="hud-level">Ур. 1</div>
+    </div>
+
+    <div class="main-grid">
+      <div class="panel">
+        <h3>🏗️ Постройки</h3>
+        <div class="scroll-area" id="buildings-list"></div>
+      </div>
+
+      <div class="panel">
+        <h3>💬 Общий чат</h3>
+        <div class="scroll-area chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chat-input" placeholder="Сообщение..." maxlength="200">
+          <button id="chat-send">➤</button>
+        </div>
+      </div>
+
+      <div class="panel panel-guild">
+        <h3>⚔️ Гильдия</h3>
+        <div class="scroll-area" id="guild-content">
+          <div id="guild-info" style="font-size:13px; margin-bottom:8px; color:#aaa;">Вы не в гильдии</div>
+          <div class="guild-create" id="guild-create-form" style="display:none;">
+            <input type="text" id="guild-name-input" placeholder="Название" maxlength="20">
+            <button id="guild-create-btn">Создать (500💰)</button>
+          </div>
+          <div id="guild-members-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="login-screen">
+    <h1>НЭО-ЭДО<br>Пепел Сакуры</h1>
+    <input type="text" id="nickname-input" placeholder="Введите ник" maxlength="16" autocomplete="off">
+    <button id="login-btn">Войти в Эдо</button>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <div id="profile-modal">
+    <div class="modal-content">
+      <button class="close-btn" id="profile-close">×</button>
+      <h2 id="profile-nickname">Профиль</h2>
+      <div id="profile-body"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const CURRENT_VERSION = '1.0.0';
+    const socket = io();
+    let myPlayer = null, myNickname = null, currentGuild = null, chatMessages = [];
+
+    const $ = (id) => document.getElementById(id);
+    const updateOverlay = $('update-overlay'), toastContainer = $('toast-container');
+    const loginScreen = $('login-screen'), gameContainer = $('game-container');
+
+    function formatNumber(n) { return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(Math.floor(n)); }
+    
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div'); toast.className = `toast ${type}`; toast.textContent = message;
+      toastContainer.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    function updateHUD() {
+      if (!myPlayer) return;
+      const setVal = (id, val) => { const el = $(id); if (el.textContent !== val) el.textContent = val; };
+      setVal('hud-credits', formatNumber(myPlayer.credits));
+      setVal('hud-energy', formatNumber(myPlayer.energy));
+      setVal('hud-shards', formatNumber(myPlayer.shards));
+      setVal('hud-nickname', myPlayer.nickname);
+      setVal('hud-level', 'Ур. ' + myPlayer.level);
+    }
+
+    async function checkForUpdates() {
+      try {
+        const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' });
+        const data = await res.json();
+        if (data.version && data.version !== CURRENT_VERSION) {
+          updateOverlay.classList.add('active'); loginScreen.style.display = 'none';
+          setTimeout(() => location.reload(true), 1500); return false;
+        }
+        return true;
+      } catch { return true; }
+    }
+
+    checkForUpdates().then(canProceed => {
+      if (!canProceed) return;
+      const savedNick = localStorage.getItem('neo_edo_nick');
+      if (savedNick) $('nickname-input').value = savedNick;
+      
+      $('login-btn').onclick = () => {
+        const nick = $('nickname-input').value.trim();
+        if (nick.length < 2) return showToast('Ник слишком короткий', 'error');
+        localStorage.setItem('neo_edo_nick', nick); socket.emit('register', nick);
+      };
+    });
+
+    socket.on('registered', (player) => {
+      myPlayer = player; myNickname = player.nickname;
+      loginScreen.style.display = 'none'; gameContainer.style.display = 'flex';
+      updateHUD(); renderBuildings(); renderGuild(); socket.emit('setOnline', myNickname);
+    });
+
+    socket.on('chatMessage', (msg) => {
+      chatMessages.push(msg); if (chatMessages.length > 100) chatMessages.shift(); renderChat();
+    });
+
+    socket.on('buildingUpdated', ({ id, building }) => { if (myPlayer) { myPlayer.buildings[id] = building; renderBuildings(); } });
+    socket.on('buildingCompleted', ({ id, building }) => { if (myPlayer) { myPlayer.buildings[id] = building; renderBuildings(); showToast('Постройка улучшена!', 'success'); } });
+    
+    socket.on('guildUpdated', (guild) => {
+      currentGuild = guild;
+      if (myPlayer && guild) { myPlayer.guildId = guild.id; myPlayer.guildRole = guild.members[myNickname] || 'private'; }
+      renderGuild();
+    });
+
+    socket.on('profileData', (p) => {
+      $('profile-nickname').textContent = p.nickname;
+      let html = `<div class="profile-row"><span class="label">Уровень:</span> ${p.level}</div>
+                  <div class="profile-row"><span class="label">Гильдия:</span> ${p.guild}</div>
+                  <div class="profile-row"><span class="label">Кредиты:</span> ${formatNumber(p.credits)}</div>
+                  <div class="profile-row"><span class="label">Осколки:</span> ${p.shards}</div>`;
+      $('profile-body').innerHTML = html; $('profile-modal').classList.add('active');
+    });
+
+    socket.on('error', (msg) => showToast(msg, 'error'));
+
+    const BUILDING_NAMES = { house: '🏠 Дом', forge: '🔨 Кузница', shrine: '⛩️ Святилище', datacenter: '🖥️ Дата-центр' };
+    
+    function renderBuildings() {
+      if (!myPlayer) return;
+      const container = $('buildings-list');
+      if (container.children.length !== 4) {
+        container.innerHTML = '';
+        for (const id of Object.keys(BUILDING_NAMES)) {
+          const card = document.createElement('div'); card.className = 'building-card'; card.dataset.id = id;
+          card.innerHTML = `<div class="info"><div class="name">${BUILDING_NAMES[id]}</div>
+            <div class="level">Ур. <span class="lvl-val"></span></div><div class="timer"></div></div>
+            <button>Улучшить</button>`;
+          card.querySelector('button').onclick = () => socket.emit('upgradeBuilding', id);
+          container.appendChild(card);
+        }
+      }
+      for (const id of Object.keys(BUILDING_NAMES)) {
+        const b = myPlayer.buildings[id], card = container.querySelector(`[data-id="${id}"]`);
+        if (!card) continue;
+        if (card.querySelector('.lvl-val').textContent !== String(b.level)) card.querySelector('.lvl-val').textContent = b.level;
+        const timerEl = card.querySelector('.timer'), btn = card.querySelector('button');
+        if (b.upgrading && b.upgradeEnd) {
+          const rem = Math.max(0, Math.ceil((b.upgradeEnd - Date.now()) / 1000));
+          if (timerEl.textContent !== `⏳ ${rem}с`) timerEl.textContent = `⏳ ${rem}с`;
+          if (!btn.disabled) btn.disabled = true;
+        } else {
+          if (timerEl.textContent !== '') timerEl.textContent = '';
+          if (btn.disabled) btn.disabled = false;
+        }
+      }
+    }
+
+    function renderChat() {
+      const chatEl = $('chat-messages');
+      for (let i = chatEl.children.length; i < chatMessages.length; i++) {
+        const m = chatMessages[i], div = document.createElement('div'); div.className = 'chat-msg';
+        div.innerHTML = `<span class="from" data-nick="${m.from}">${m.from}</span>: <span class="text">${escapeHtml(m.text)}</span>`;
+        div.querySelector('.from').onclick = () => socket.emit('getProfile', m.from);
+        chatEl.appendChild(div);
+      }
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+    
+    function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
+
+    function renderGuild() {
+      if (!myPlayer) return;
+      if (!myPlayer.guildId || !currentGuild) {
+        $('guild-info').textContent = 'Вы не в гильдии';
+        $('guild-create-form').style.display = 'flex'; $('guild-members-list').innerHTML = ''; return;
+      }
+      $('guild-create-form').style.display = 'none';
+      $('guild-info').textContent = `Гильдия: ${currentGuild.name}`;
+      const myRole = currentGuild.members[myNickname];
+      let html = '';
+      for (const [nick, role] of Object.entries(currentGuild.members)) {
+        const roleLabel = { leader: 'Лидер', general: 'Генерал', officer: 'Офицер', private: 'Рядовой' }[role] || role;
+        html += `<div class="guild-member-row"><span>${nick} <small>(${roleLabel})</small></span>`;
+        if (myRole === 'leader' && nick !== myNickname) {
+          html += `<span class="actions"><button onclick="socket.emit('promoteMember', {guildId:'${currentGuild.id}', targetNick:'${nick}'})">⬆</button>
+                   <button onclick="socket.emit('demoteMember', {guildId:'${currentGuild.id}', targetNick:'${nick}'})">⬇</button>
+                   <button onclick="socket.emit('kickMember', {guildId:'${currentGuild.id}', targetNick:'${nick}'})">✕</button></span>`;
+        }
+        html += `</div>`;
+      }
+      $('guild-members-list').innerHTML = html;
+    }
+
+    $('chat-send').onclick = () => {
+      const text = $('chat-input').value.trim(); if (!text) return;
+      socket.emit('chatMessage', text); $('chat-input').value = '';
+    };
+    $('chat-input').onkeydown = (e) => { if (e.key === 'Enter') $('chat-send').click(); };
+    $('guild-create-btn').onclick = () => {
+      const name = $('guild-name-input').value.trim();
+      if (name) { socket.emit('createGuild', name); $('guild-name-input').value = ''; }
+    };
+    $('profile-close').onclick = () => $('profile-modal').classList.remove('active');
+
+    setInterval(() => { if (myPlayer) renderBuildings(); }, 1000);
+  </script>
+</body>
+</html>
