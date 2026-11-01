@@ -26,7 +26,6 @@ io.on('connection', (socket) => {
     
     let player = data.players[nickname];
     
-    // Если игрок новый - создаем
     if (!player) {
       player = {
         nickname, level: 1, exp: 0, credits: 100, energy: 50, maxEnergy: 50, shards: 0,
@@ -42,7 +41,7 @@ io.on('connection', (socket) => {
       data.players[nickname] = player;
       saveData(data);
     } else {
-      // МИГРАЦИЯ СТАРЫХ ДАННЫХ (чтобы не было пустого экрана)
+      // Миграция
       if (player.incomeLevel === undefined) player.incomeLevel = 1;
       if (player.playerClass === undefined) player.playerClass = null;
       if (player.maxEnergy === undefined) player.maxEnergy = 50;
@@ -94,6 +93,13 @@ io.on('connection', (socket) => {
     io.emit('chatMessage', { from: socket.nickname, guild: guildName, text: msg, time: Date.now() }); 
   });
 
+  // Тихое обновление для HUD (без открытия модалки)
+  socket.on('syncPlayer', () => {
+    const player = data.players[socket.nickname];
+    if (player) socket.emit('playerSync', player);
+  });
+
+  // Просмотр профиля (по клику)
   socket.on('getProfile', (nickname) => {
     const p = data.players[nickname];
     if (!p) return;
