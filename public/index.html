@@ -26,7 +26,6 @@
     .class-card h3 { color: #4ade80; font-size: 18px; margin-bottom: 4px; }
     .class-card p { font-size: 13px; margin: 0; color: #aaa; }
 
-    /* Основной игровой экран */
     #screen-game { display: none; flex-direction: column; height: 100vh; height: 100dvh; z-index: 1; background: #0a0a12; }
     #screen-game.active { display: flex; }
     
@@ -39,15 +38,16 @@
     .tab-content { position: absolute; inset: 0; padding: 12px; overflow-y: auto; display: none; flex-direction: column; }
     .tab-content.active { display: flex; }
 
+    /* Нижнее меню - теперь 4 вкладки */
     .bottom-nav { display: flex; background: #12122a; border-top: 1px solid #2a2a4a; padding-bottom: env(safe-area-inset-bottom); }
-    .nav-btn { flex: 1; padding: 12px 0; text-align: center; font-size: 24px; color: #555; cursor: pointer; transition: 0.2s; }
+    .nav-btn { flex: 1; padding: 12px 0; text-align: center; font-size: 22px; color: #555; cursor: pointer; transition: 0.2s; }
     .nav-btn.active { color: #f0a0c0; background: #1a1a3a; border-top: 2px solid #f0a0c0; }
 
     .building-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
     .building-card .name { font-weight: bold; font-size: 15px; color: #fff; }
     .building-card .level { font-size: 12px; color: #888; margin-top: 2px; }
     .building-card .timer { font-size: 12px; color: #f0a0c0; margin-top: 4px; }
-    .btn-upg { background: #5a2a6a; border: 1px solid #7a4a8a; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .btn-upg { background: #5a2a6a; border: 1px solid #7a4a8a; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; text-align: center; }
     .btn-upg:disabled { opacity: 0.5; }
     .income-card { border-color: #4ade80; background: #0a1a0a; }
     .income-card .btn-upg { background: #2a6a3a; border-color: #4ade80; }
@@ -75,6 +75,14 @@
 
     .shop-item { display: flex; justify-content: space-between; align-items: center; background: #1a1a3a; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
     .shop-item button { background: #4ade80; color: #000; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; }
+
+    /* Квесты */
+    .quest-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .quest-title { font-weight: bold; color: #fff; font-size: 15px; }
+    .quest-desc { font-size: 13px; color: #aaa; }
+    .quest-reward { font-size: 13px; color: #4ade80; font-weight: bold; }
+    .btn-claim { background: #4ade80; color: #000; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .btn-claim:disabled { background: #2a2a4a; color: #666; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -148,6 +156,11 @@
         </div>
       </div>
 
+      <div id="tab-quests" class="tab-content">
+        <h3 style="color:#f0a0c0; margin-bottom:10px;">Задания</h3>
+        <div id="quests-list"></div>
+      </div>
+
       <div id="tab-guild" class="tab-content">
         <h3 style="color:#f0a0c0; margin-bottom:10px;">Гильдия</h3>
         <div id="guild-info" style="margin-bottom:10px; font-size:14px; color:#aaa;">Вы не в гильдии</div>
@@ -162,16 +175,25 @@
     <div class="bottom-nav">
       <div class="nav-btn active" data-tab="city" onclick="switchTab('city')">🏙️</div>
       <div class="nav-btn" data-tab="chat" onclick="switchTab('chat')">💬</div>
+      <div class="nav-btn" data-tab="quests" onclick="switchTab('quests')">📜</div>
       <div class="nav-btn" data-tab="guild" onclick="switchTab('guild')">⚔️</div>
     </div>
   </div>
 
-  <!-- Модалки -->
   <div id="modal-profile" class="modal">
     <div class="modal-box">
       <button class="close-btn" onclick="closeModal('modal-profile')">×</button>
       <h2 id="profile-title">Профиль</h2>
-      <div id="profile-content" style="font-size:14px; line-height:1.6;"></div>
+      <div id="profile-content" style="font-size:14px; line-height:1.6; margin-bottom: 15px;"></div>
+      
+      <!-- Блок промокода -->
+      <div id="promo-section" style="border-top: 1px solid #2a2a4a; padding-top: 15px;">
+        <p style="margin-bottom: 8px; font-size: 14px; color: #aaa;">Ввести промокод:</p>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="promo-input" placeholder="Код" style="padding: 8px; text-align:left;">
+          <button class="btn-upg" onclick="redeemPromo()" style="background:#4ade80; color:#000;">ОК</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -239,13 +261,14 @@
       socket.emit('setOnline', myNickname);
       updateHUD();
       renderBuildings();
+      renderQuests();
     }
 
-    // --- Тихое обновление HUD ---
     socket.on('playerSync', (player) => {
       myPlayer = player;
       updateHUD();
-      renderBuildings(); // Обновляем таймеры, если что-то достроилось
+      renderBuildings();
+      renderQuests();
     });
 
     function updateHUD() {
@@ -261,7 +284,6 @@
       return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : Math.floor(n || 0);
     }
 
-    // Каждые 3 секунды тихо запрашиваем обновление (без открытия модалки)
     setInterval(() => {
       if (myNickname && document.getElementById('screen-game').classList.contains('active')) {
         socket.emit('syncPlayer');
@@ -279,6 +301,7 @@
       }
     };
 
+    // --- ПОСТРОЙКИ (с ценами) ---
     const BUILDING_NAMES = { house: '🏠 Дом', forge: '🔨 Кузница', shrine: '⛩️ Святилище', datacenter: '🖥️ Дата-центр' };
     
     function renderBuildings() {
@@ -314,18 +337,78 @@
         
         card.querySelector('.lvl-val').textContent = b.level;
         const timerEl = card.querySelector('.timer'), btn = card.querySelector('button');
+        
         if (b.upgrading) {
           timerEl.textContent = `⏳ ${Math.max(0, Math.ceil((b.upgradeEnd - Date.now()) / 1000))}с`;
           btn.disabled = true;
+          btn.textContent = 'В процессе';
         } else {
           timerEl.textContent = '';
           btn.disabled = false;
+          // Показываем стоимость
+          btn.textContent = `Улучшить (${b.level * 100}💰 ${b.level * 10}⚡)`;
         }
       }
     }
 
     setInterval(() => { if (myPlayer) renderBuildings(); }, 1000);
 
+    // --- КВЕСТЫ ---
+    function renderQuests() {
+      if (!myPlayer || !myPlayer.quests) return;
+      const container = document.getElementById('quests-list');
+      const q = myPlayer.quests;
+      let html = '';
+
+      // Квест 1
+      let q1Done = q.buildOnce;
+      let q1Claimed = q.claimed.q1;
+      html += `<div class="quest-card">
+        <div class="quest-title">Мастер на все руки</div>
+        <div class="quest-desc">Улучшите любое здание 1 раз.</div>
+        <div class="quest-reward">Награда: 500💰</div>
+        <button class="btn-claim" ${(!q1Done || q1Claimed) ? 'disabled' : ''} onclick="claimQuest('q1')">
+          ${q1Claimed ? 'Получено' : (q1Done ? 'Забрать' : 'В процессе...')}
+        </button>
+      </div>`;
+
+      // Квест 2
+      let q2Done = q.chatCount >= 3;
+      let q2Claimed = q.claimed.q2;
+      html += `<div class="quest-card">
+        <div class="quest-title">Голос улиц</div>
+        <div class="quest-desc">Отправьте 3 сообщения в общий чат (${Math.min(q.chatCount, 3)}/3).</div>
+        <div class="quest-reward">Награда: 5💎</div>
+        <button class="btn-claim" ${(!q2Done || q2Claimed) ? 'disabled' : ''} onclick="claimQuest('q2')">
+          ${q2Claimed ? 'Получено' : (q2Done ? 'Забрать' : 'В процессе...')}
+        </button>
+      </div>`;
+
+      // Квест 3
+      let q3Done = q.guildCreated;
+      let q3Claimed = q.claimed.q3;
+      html += `<div class="quest-card">
+        <div class="quest-title">Лидер клана</div>
+        <div class="quest-desc">Создайте свою гильдию.</div>
+        <div class="quest-reward">Награда: 2000💰</div>
+        <button class="btn-claim" ${(!q3Done || q3Claimed) ? 'disabled' : ''} onclick="claimQuest('q3')">
+          ${q3Claimed ? 'Получено' : (q3Done ? 'Забрать' : 'В процессе...')}
+        </button>
+      </div>`;
+
+      container.innerHTML = html;
+    }
+
+    window.claimQuest = (id) => socket.emit('claimQuest', id);
+
+    socket.on('questClaimed', (data) => {
+      myPlayer = data.player;
+      updateHUD();
+      renderQuests();
+      showToast('Награда получена!', 'success');
+    });
+
+    // --- ЧАТ ---
     socket.on('chatMessage', (msg) => {
       const chat = document.getElementById('chat-messages');
       if (chat.children.length > 50) chat.removeChild(chat.firstChild);
@@ -356,7 +439,7 @@
       document.getElementById('guild-members-list').innerHTML = html;
     });
 
-    // Открытие профиля ТОЛЬКО по клику
+    // --- ПРОФИЛЬ И ПРОМОКОД ---
     window.openProfile = (nick) => {
       socket.emit('getProfile', nick);
     };
@@ -367,9 +450,30 @@
         <b>Класс:</b> ${p.playerClass || 'Не выбран'}<br><b>Уровень:</b> ${p.level}<br>
         <b>Гильдия:</b> ${p.guild}<br><b>Кредиты:</b> ${formatNumber(p.credits)}<br>
         <b>Осколки:</b> ${p.shards}<br><b>Доход:</b> Ур. ${p.incomeLevel || 1}`;
+      
+      // Скрываем промокод, если смотрим чужой профиль или уже использовали
+      if (p.nickname === myNickname && !p.promoUsed) {
+        document.getElementById('promo-section').style.display = 'block';
+      } else {
+        document.getElementById('promo-section').style.display = 'none';
+      }
+      
       document.getElementById('modal-profile').classList.add('active');
     });
 
+    window.redeemPromo = () => {
+      const code = document.getElementById('promo-input').value.trim();
+      if (code) socket.emit('redeemPromo', code);
+    };
+
+    socket.on('promoSuccess', () => {
+      showToast('Промокод активирован! +100 💎', 'success');
+      document.getElementById('promo-input').value = '';
+      document.getElementById('promo-section').style.display = 'none';
+      socket.emit('syncPlayer');
+    });
+
+    // --- ОСТАЛЬНОЕ ---
     window.toggleShop = () => document.getElementById('modal-shop').classList.add('active');
     window.closeModal = (id) => document.getElementById(id).classList.remove('active');
     window.buyItem = (item) => socket.emit('buyItem', item);

@@ -29,7 +29,8 @@ io.on('connection', (socket) => {
     if (!player) {
       player = {
         nickname, level: 1, exp: 0, credits: 100, energy: 50, maxEnergy: 50, shards: 0,
-        incomeLevel: 1, playerClass: null,
+        incomeLevel: 1, playerClass: null, promoUsed: false,
+        quests: { buildOnce: false, chatCount: 0, guildCreated: false, claimed: {} },
         buildings: {
           house: { level: 1, upgrading: false, upgradeEnd: 0 },
           forge: { level: 1, upgrading: false, upgradeEnd: 0 },
@@ -41,7 +42,9 @@ io.on('connection', (socket) => {
       data.players[nickname] = player;
       saveData(data);
     } else {
-      // Миграция
+      // Миграция старых игроков
+      if (!player.quests) player.quests = { buildOnce: false, chatCount: 0, guildCreated: false, claimed: {} };
+      if (player.promoUsed === undefined) player.promoUsed = false;
       if (player.incomeLevel === undefined) player.incomeLevel = 1;
       if (player.playerClass === undefined) player.playerClass = null;
       if (player.maxEnergy === undefined) player.maxEnergy = 50;
@@ -64,7 +67,6 @@ io.on('connection', (socket) => {
   socket.on('setClass', (className) => {
     const player = data.players[socket.nickname];
     if (!player) return;
-    
     if (!player.playerClass) {
       player.playerClass = className;
       if (className === 'samurai') player.buildings.forge.level = 2;
@@ -78,35 +80,34 @@ io.on('connection', (socket) => {
   socket.on('setOnline', (nickname) => {
     data.online[socket.id] = nickname;
     socket.nickname = nickname;
-    io.emit('onlineList', Object.values(data.online).filter(Boolean));
   });
 
-  socket.on('disconnect', () => {
-    delete data.online[socket.id];
-    io.emit('onlineList', Object.values(data.online).filter(Boolean));
-  });
+  socket.on('disconnect', () => { delete data.online[socket.id]; });
 
   socket.on('chatMessage', (msg) => {
     if (!socket.nickname || !msg.trim()) return;
     const player = data.players[socket.nickname];
     const guildName = player?.guildId ? data.guilds[player.guildId]?.name : null;
+    
+    // Прогресс квеста за чат
+    player.quests.chatCount += 1;
+    saveData(data);
+
     io.emit('chatMessage', { from: socket.nickname, guild: guildName, text: msg, time: Date.now() }); 
   });
 
-  // Тихое обновление для HUD (без открытия модалки)
   socket.on('syncPlayer', () => {
     const player = data.players[socket.nickname];
     if (player) socket.emit('playerSync', player);
   });
 
-  // Просмотр профиля (по клику)
   socket.on('getProfile', (nickname) => {
     const p = data.players[nickname];
     if (!p) return;
     const guild = p.guildId ? data.guilds[p.guildId] : null;
     socket.emit('profileData', { 
       nickname: p.nickname, level: p.level, guild: guild ? guild.name : 'Нет', playerClass: p.playerClass || 'Не выбран',
-      buildings: p.buildings, credits: p.credits, shards: p.shards, incomeLevel: p.incomeLevel 
+      buildings: p.buildings, credits: p.credits, shards: p.shards, incomeLevel: p.incomeLevel, promoUsed: p.promoUsed
     });
   });
 
@@ -121,7 +122,9 @@ io.on('connection', (socket) => {
 
     player.credits -= cost; player.energy -= energyCost;
     b.upgrading = true; b.upgradeEnd = Date.now() + 30000;
-    saveData(data); socket.emit('buildingUpdated', { id: buildingId, building: b });
+    player.quests.buildOnce = true; // Прогресс квеста
+    saveData(data); 
+    socket.emit('buildingUpdated', { id: buildingId, building: b });
   });
 
   socket.on('upgradeIncome', () => {
@@ -145,7 +148,7 @@ io.on('connection', (socket) => {
       for (let id in player.buildings) if (player.buildings[id].upgrading) player.buildings[id].upgradeEnd = Date.now();
     }
     saveData(data);
-    socket.emit('shopSuccess', { itemId, newShards: player.shards, newCredits: player.credits, newEnergy: player.energy });
+    socket.emit('shopSuccess', { itemId });
   });
 
   socket.on('createGuild', (guildName) => {
@@ -156,7 +159,42 @@ io.on('connection', (socket) => {
     const guildId = 'g_' + Date.now();
     data.guilds[guildId] = { id: guildId, name: guildName, leader: socket.nickname, members: { [socket.nickname]: 'leader' } };
     player.credits -= 500; player.guildId = guildId; player.guildRole = 'leader';
+    player.quests.guildCreated = true; // Прогресс квеста
     saveData(data); socket.emit('guildUpdated', data.guilds[guildId]);
+  });
+
+  // --- НОВОЕ: Активация промокода ---
+  socket.on('redeemPromo', (code) => {
+    const player = data.players[socket.nickname];
+    if (!player) return;
+    
+    if (code === 'TEST100') {
+      if (player.promoUsed) return socket.emit('error', 'Вы уже использовали этот промокод!');
+      player.promoUsed = true;
+      player.shards += 100;
+      saveData(data);
+      socket.emit('promoSuccess');
+    } else {
+      socket.emit('error', 'Неверный промокод');
+    }
+  });
+
+  // --- НОВОЕ: Получение награды за квест ---
+  socket.on('claimQuest', (questId) => {
+    const player = data.players[socket.nickname];
+    if (!player || player.quests.claimed[questId]) return;
+
+    const q = player.quests;
+    if (questId === 'q1' && q.buildOnce && !q.claimed.q1) {
+      player.credits += 500; q.claimed.q1 = true;
+    } else if (questId === 'q2' && q.chatCount >= 3 && !q.claimed.q2) {
+      player.shards += 5; q.claimed.q2 = true;
+    } else if (questId === 'q3' && q.guildCreated && !q.claimed.q3) {
+      player.credits += 2000; q.claimed.q3 = true;
+    } else return;
+
+    saveData(data);
+    socket.emit('questClaimed', { questId, player });
   });
 });
 
