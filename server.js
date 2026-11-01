@@ -28,7 +28,7 @@ io.on('connection', (socket) => {
     if (!player) {
       player = {
         nickname, level: 1, exp: 0, credits: 100, energy: 50, maxEnergy: 50, shards: 0,
-        incomeLevel: 1, // Уровень заработка
+        incomeLevel: 1, playerClass: null,
         buildings: {
           house: { level: 1, upgrading: false, upgradeEnd: 0 },
           forge: { level: 1, upgrading: false, upgradeEnd: 0 },
@@ -43,9 +43,27 @@ io.on('connection', (socket) => {
     
     socket.nickname = nickname;
     socket.emit('registered', player);
+  });
+
+  // Выбор класса
+  socket.on('setClass', (className) => {
+    const player = data.players[socket.nickname];
+    if (!player || player.playerClass) return;
     
-    // Автоматически отправляем историю чата новому игроку (если нужно)
-    // socket.emit('chatHistory', chatHistory); 
+    player.playerClass = className;
+    
+    // Бонусы за класс
+    if (className === 'samurai') {
+      player.buildings.forge.level = 2;
+    } else if (className === 'monk') {
+      player.maxEnergy += 50;
+      player.energy += 50;
+    } else if (className === 'merchant') {
+      player.credits += 500;
+    }
+
+    saveData(data);
+    socket.emit('classUpdated', player);
   });
 
   socket.on('setOnline', (nickname) => {
@@ -59,55 +77,12 @@ io.on('connection', (socket) => {
     io.emit('onlineList', Object.values(data.online).filter(Boolean));
   });
 
-  // Исправленный чат
   socket.on('chatMessage', (msg) => {
     if (!socket.nickname || !msg.trim()) return;
     const player = data.players[socket.nickname];
     const guildName = player?.guildId ? data.guilds[player.guildId]?.name : null;
     const msgData = { from: socket.nickname, guild: guildName, text: msg, time: Date.now() };
-    
-    // Отправляем всем, включая отправителя
     io.emit('chatMessage', msgData); 
-  });
-
-  socket.on('createGuild', (guildName) => {
-    const player = data.players[socket.nickname];
-    if (!player || player.credits < 500) return socket.emit('error', 'Нужно 500 кредитов');
-    if (player.guildId) return socket.emit('error', 'Вы уже в гильдии');
-    if (Object.values(data.guilds).some(g => g.name === guildName)) return socket.emit('error', 'Имя занято');
-
-    const guildId = 'g_' + Date.now();
-    data.guilds[guildId] = { id: guildId, name: guildName, leader: socket.nickname, members: { [socket.nickname]: 'leader' }, createdAt: Date.now() };
-    player.credits -= 500; player.guildId = guildId; player.guildRole = 'leader';
-    saveData(data);
-    socket.emit('guildUpdated', data.guilds[guildId]);
-  });
-
-  socket.on('promoteMember', ({ guildId, targetNick }) => {
-    const guild = data.guilds[guildId], player = data.players[socket.nickname];
-    if (guild && player && player.guildRole === 'leader' && guild.members[targetNick]) {
-      const roles = ['leader', 'general', 'officer', 'private'];
-      const idx = roles.indexOf(guild.members[targetNick]);
-      if (idx > 0) { guild.members[targetNick] = roles[idx - 1]; saveData(data); io.to(guildId).emit('guildUpdated', guild); }
-    }
-  });
-
-  socket.on('demoteMember', ({ guildId, targetNick }) => {
-    const guild = data.guilds[guildId], player = data.players[socket.nickname];
-    if (guild && player && player.guildRole === 'leader' && guild.members[targetNick]) {
-      const roles = ['leader', 'general', 'officer', 'private'];
-      const idx = roles.indexOf(guild.members[targetNick]);
-      if (idx < roles.length - 1) { guild.members[targetNick] = roles[idx + 1]; saveData(data); io.to(guildId).emit('guildUpdated', guild); }
-    }
-  });
-
-  socket.on('kickMember', ({ guildId, targetNick }) => {
-    const guild = data.guilds[guildId], player = data.players[socket.nickname];
-    if (guild && player && player.guildRole === 'leader' && guild.members[targetNick] && targetNick !== socket.nickname) {
-      delete guild.members[targetNick];
-      if (data.players[targetNick]) { data.players[targetNick].guildId = null; data.players[targetNick].guildRole = null; }
-      saveData(data); io.to(guildId).emit('guildUpdated', guild);
-    }
   });
 
   // Профиль
@@ -116,12 +91,12 @@ io.on('connection', (socket) => {
     if (!p) return;
     const guild = p.guildId ? data.guilds[p.guildId] : null;
     socket.emit('profileData', { 
-      nickname: p.nickname, level: p.level, guild: guild ? guild.name : 'Нет', 
+      nickname: p.nickname, level: p.level, guild: guild ? guild.name : 'Нет', playerClass: p.playerClass,
       buildings: p.buildings, credits: p.credits, shards: p.shards, incomeLevel: p.incomeLevel 
     });
   });
 
-  // Постройки
+  // Постройки и доход
   socket.on('upgradeBuilding', (buildingId) => {
     const player = data.players[socket.nickname];
     if (!player || !player.buildings[buildingId]) return;
@@ -136,24 +111,18 @@ io.on('connection', (socket) => {
     saveData(data); socket.emit('buildingUpdated', { id: buildingId, building: b });
   });
 
-  // Улучшение пассивного дохода
   socket.on('upgradeIncome', () => {
     const player = data.players[socket.nickname];
     const cost = player.incomeLevel * 500;
     if (player.credits < cost) return socket.emit('error', 'Не хватает кредитов');
-    player.credits -= cost;
-    player.incomeLevel += 1;
-    saveData(data);
-    socket.emit('incomeUpdated', player.incomeLevel);
-    socket.emit('error', 'Доход успешно улучшен!'); // Выведем как уведомление
+    player.credits -= cost; player.incomeLevel += 1;
+    saveData(data); socket.emit('incomeUpdated', player.incomeLevel);
   });
 
-  // Магазин
   socket.on('buyItem', (itemId) => {
     const player = data.players[socket.nickname];
     const prices = { energy: 5, credits: 10, instantBuild: 15 };
     const cost = prices[itemId];
-    
     if (!cost || player.shards < cost) return socket.emit('error', 'Не хватает осколков!');
     
     player.shards -= cost;
@@ -161,15 +130,27 @@ io.on('connection', (socket) => {
     if (itemId === 'credits') player.credits += 1000;
     if (itemId === 'instantBuild') {
       for (let id in player.buildings) {
-        if (player.buildings[id].upgrading) { player.buildings[id].upgradeEnd = Date.now(); }
+        if (player.buildings[id].upgrading) player.buildings[id].upgradeEnd = Date.now();
       }
     }
     saveData(data);
     socket.emit('shopSuccess', { itemId, newShards: player.shards, newCredits: player.credits, newEnergy: player.energy });
   });
+
+  // Гильдии (упрощенно для стабильности)
+  socket.on('createGuild', (guildName) => {
+    const player = data.players[socket.nickname];
+    if (!player || player.credits < 500) return socket.emit('error', 'Нужно 500 кредитов');
+    if (player.guildId) return socket.emit('error', 'Вы уже в гильдии');
+    
+    const guildId = 'g_' + Date.now();
+    data.guilds[guildId] = { id: guildId, name: guildName, leader: socket.nickname, members: { [socket.nickname]: 'leader' } };
+    player.credits -= 500; player.guildId = guildId; player.guildRole = 'leader';
+    saveData(data); socket.emit('guildUpdated', data.guilds[guildId]);
+  });
 });
 
-// Цикл пассивного дохода и шанса кристаллов
+// Доход и кристаллы
 setInterval(() => {
   let changed = false;
   for (const nick in data.players) {
@@ -178,19 +159,16 @@ setInterval(() => {
     const elapsed = (now - p.lastIncome) / 1000;
     
     if (elapsed >= 1) {
-      // Доход: 1 + (уровень - 1) * 0.5 (каждый уровень дает +50% к базовому доходу)
       const incomeRate = 1 + (p.incomeLevel - 1) * 0.5;
       p.credits += Math.floor(elapsed * incomeRate);
       p.lastIncome = now;
       changed = true;
       
-      // Шанс выпадения осколка 1.5% (проверяем раз в 5 секунд для простоты)
-      if (Math.random() < 0.015) {
+      if (Math.random() < 0.015) { // 1.5% шанс
         p.shards += 1;
         io.to(nick).emit('shardFound');
       }
     }
-    
     for (const bid in p.buildings) {
       const b = p.buildings[bid];
       if (b.upgrading && Date.now() >= b.upgradeEnd) {

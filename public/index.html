@@ -5,385 +5,480 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>НЭО-ЭДО: Пепел Сакуры</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; overflow: hidden; font-family: system-ui, sans-serif; background: #0a0a12; color: #e0e0e0; touch-action: manipulation; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; background: #0a0a12; color: #e0e0e0; }
+    
+    /* Экраны (Загрузка, Логин, Лор, Классы, Игра) */
+    .screen { position: absolute; inset: 0; display: none; flex-direction: column; z-index: 10; background: #0a0a12; }
+    .screen.active { display: flex; }
     
     /* Экран загрузки */
-    #loading-screen { position: fixed; inset: 0; z-index: 100000; background: #0a0a12; display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 20px; transition: opacity 0.5s; }
-    #loading-screen h1 { color: #f0a0c0; font-size: 32px; text-align: center; text-shadow: 0 0 10px rgba(240,160,192,0.5); }
-    .spinner { width: 50px; height: 50px; border: 4px solid rgba(240,160,192,0.2); border-top-color: #f0a0c0; border-radius: 50%; animation: spin 1s linear infinite; }
+    #screen-loading { justify-content: center; align-items: center; gap: 20px; z-index: 100; }
+    .spinner { width: 40px; height: 40px; border: 3px solid rgba(240,160,192,0.2); border-top-color: #f0a0c0; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    #orientation-lock { display: none; position: fixed; inset: 0; z-index: 10000; background: #0a0a12; justify-content: center; align-items: center; flex-direction: column; gap: 20px; text-align: center; padding: 20px; }
-    @media (orientation: portrait) { #orientation-lock { display: flex; } #game-container { display: none !important; } }
-    #orientation-lock .icon { font-size: 64px; animation: rotatePhone 1.5s infinite; }
-    @keyframes rotatePhone { 0% { transform: rotate(0deg); } 25% { transform: rotate(90deg); } 50% { transform: rotate(90deg); } 75% { transform: rotate(0deg); } 100% { transform: rotate(0deg); } }
+    /* Общие стили для экранов с текстом */
+    .content-box { padding: 24px; display: flex; flex-direction: column; flex: 1; overflow-y: auto; justify-content: center; }
+    h1 { color: #f0a0c0; text-align: center; font-size: 26px; margin-bottom: 16px; text-shadow: 0 0 10px rgba(240,160,192,0.3); }
+    p { line-height: 1.5; color: #ccc; margin-bottom: 16px; font-size: 15px; text-align: justify; }
+    .btn { background: linear-gradient(135deg, #5a2a6a, #3a1a4a); border: 1px solid #7a4a8a; color: #fff; padding: 14px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; margin-top: auto; }
+    input { background: #12122a; border: 1px solid #3a3a5a; padding: 14px; border-radius: 12px; color: #fff; font-size: 16px; text-align: center; width: 100%; outline: none; }
+
+    /* Экран выбора класса */
+    .class-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+    .class-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 16px; cursor: pointer; }
+    .class-card h3 { color: #4ade80; font-size: 18px; margin-bottom: 4px; }
+    .class-card p { font-size: 13px; margin: 0; color: #aaa; }
+
+    /* --- ИГРОВОЙ ИНТЕРФЕЙС (Вертикальный) --- */
+    #screen-game { display: none; flex-direction: column; height: 100vh; height: 100dvh; z-index: 1; }
     
-    #update-overlay { display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.92); justify-content: center; align-items: center; flex-direction: column; gap: 16px; text-align: center; padding: 20px; }
-    #update-overlay.active { display: flex; }
+    .hud { display: flex; justify-content: space-between; padding: 12px; background: #12122a; border-bottom: 1px solid #2a2a4a; }
+    .hud-item { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: #888; }
+    .hud-item .val { font-size: 15px; font-weight: bold; color: #f0e68c; margin-top: 2px; }
+    .hud-item.nickname .val { color: #f0a0c0; cursor: pointer; text-decoration: underline; }
 
-    #game-container { display: flex; flex-direction: column; height: 100vh; max-width: 1400px; margin: 0 auto; padding: 8px; display: none; }
-    .header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 12px; border: 1px solid #2a2a4a; flex-shrink: 0; margin-bottom: 8px; }
-    .header .resources { display: flex; gap: 16px; font-size: 14px; }
-    .header .resource-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-    .header .resource-item .value { font-weight: 600; color: #f0e68c; min-width: 40px; }
-    .header .nickname { font-weight: 600; color: #f0a0c0; font-size: 14px; cursor: pointer; text-decoration: underline; }
-    .header .level-badge { background: #2a1a3a; padding: 2px 10px; border-radius: 20px; font-size: 12px; border: 1px solid #5a3a6a; }
-    .header .shop-btn { background: #5a2a6a; border: 1px solid #7a4a8a; border-radius: 6px; color: #fff; padding: 4px 10px; cursor: pointer; margin-left: 10px; font-weight: bold; }
+    .tabs { display: flex; flex: 1; position: relative; overflow: hidden; }
+    .tab-content { position: absolute; inset: 0; padding: 12px; overflow-y: auto; display: none; flex-direction: column; }
+    .tab-content.active { display: flex; }
 
-    .main-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
-    @media (max-width: 800px) { .main-grid { grid-template-columns: 1fr 1fr; } .panel-guild { grid-column: span 2; } }
-    @media (max-width: 550px) { .main-grid { grid-template-columns: 1fr; } .panel-guild { grid-column: span 1; } }
+    /* Нижнее меню */
+    .bottom-nav { display: flex; background: #12122a; border-top: 1px solid #2a2a4a; padding-bottom: env(safe-area-inset-bottom); }
+    .nav-btn { flex: 1; padding: 12px 0; text-align: center; font-size: 24px; color: #555; cursor: pointer; transition: 0.2s; }
+    .nav-btn.active { color: #f0a0c0; background: #1a1a3a; border-top: 2px solid #f0a0c0; }
 
-    .panel { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 10px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-    .panel h3 { font-size: 14px; text-transform: uppercase; color: #f0a0c0; margin-bottom: 8px; flex-shrink: 0; border-bottom: 1px solid #2a2a4a; padding-bottom: 6px; display: flex; justify-content: space-between; }
-    .panel .scroll-area { flex: 1; overflow-y: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: #3a3a5a transparent; }
+    /* Карточки построек */
+    .building-card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .building-card .name { font-weight: bold; font-size: 15px; color: #fff; }
+    .building-card .level { font-size: 12px; color: #888; margin-top: 2px; }
+    .building-card .timer { font-size: 12px; color: #f0a0c0; margin-top: 4px; }
+    .btn-upg { background: #5a2a6a; border: 1px solid #7a4a8a; color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .btn-upg:disabled { opacity: 0.5; }
+    .income-card { border-color: #4ade80; background: #0a1a0a; }
+    .income-card .btn-upg { background: #2a6a3a; border-color: #4ade80; }
 
-    .building-card { background: #1a1a3a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-    .building-card .info { flex: 1; }
-    .building-card .name { font-weight: 600; font-size: 13px; }
-    .building-card .level { font-size: 11px; color: #888; }
-    .building-card .timer { font-size: 12px; color: #f0a0c0; }
-    .building-card button { background: linear-gradient(135deg, #5a2a6a, #3a1a4a); color: #f0e0f0; border: 1px solid #7a4a8a; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
-    .building-card button:disabled { opacity: 0.4; cursor: not-allowed; }
-    .income-card { background: #1a2a1a; border-color: #4ade80; }
-    .income-card button { background: linear-gradient(135deg, #2a6a3a, #1a4a2a); border-color: #4ade80; }
+    /* Чат */
+    #chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; }
+    .chat-msg { font-size: 14px; line-height: 1.4; word-break: break-word; }
+    .chat-msg .from { color: #f0a0c0; font-weight: bold; cursor: pointer; }
+    .chat-msg .text { color: #ddd; }
+    .chat-input-row { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid #2a2a4a; }
+    .chat-input-row input { flex: 1; padding: 10px; text-align: left; }
+    .chat-input-row button { background: #5a2a6a; color: #fff; border: none; border-radius: 8px; padding: 0 16px; font-weight: bold; }
 
-    .chat-messages { font-size: 12px; }
-    .chat-msg { margin-bottom: 4px; word-break: break-word; }
-    .chat-msg .from { color: #f0a0c0; font-weight: 600; cursor: pointer; text-decoration: underline; }
-    .chat-msg .text { color: #ccc; }
-    .chat-input-row { display: flex; gap: 6px; margin-top: 6px; flex-shrink: 0; }
-    .chat-input-row input { flex: 1; background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 6px 10px; color: #e0e0e0; font-size: 12px; }
-    .chat-input-row button { background: #5a2a6a; border: 1px solid #7a4a8a; border-radius: 6px; color: #f0e0f0; padding: 6px 14px; font-size: 12px; cursor: pointer; }
-
-    .guild-create { display: flex; gap: 6px; margin-bottom: 8px; }
-    .guild-create input { flex: 1; background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 6px; color: #e0e0e0; font-size: 12px; }
-    .guild-create button { background: #5a2a6a; border: 1px solid #7a4a8a; border-radius: 6px; color: #f0e0f0; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-    .guild-member-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; font-size: 12px; }
-    .guild-member-row .nick { cursor: pointer; text-decoration: underline; color: #f0a0c0; }
-    .guild-member-row .actions button { background: transparent; border: 1px solid #3a3a5a; border-radius: 4px; color: #ccc; font-size: 10px; padding: 2px 6px; cursor: pointer; }
-
-    #toast-container { position: fixed; top: 12px; right: 12px; z-index: 10001; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-    .toast { background: #1a1a3a; border: 1px solid #5a3a6a; border-radius: 8px; padding: 10px 16px; color: #f0e0f0; font-size: 13px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); animation: slideIn 0.3s ease-out; pointer-events: auto; max-width: 300px; }
-    .toast.error { border-color: #a04040; background: #2a1a1a; }
-    .toast.success { border-color: #40a060; background: #1a2a1a; }
-    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-    /* Модальные окна */
-    .modal { display: none; position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
+    /* Модалки */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 50; display: none; justify-content: center; align-items: center; padding: 20px; }
     .modal.active { display: flex; }
-    .modal-content { background: #12122a; border: 1px solid #5a3a6a; border-radius: 16px; padding: 24px; min-width: 300px; max-width: 500px; position: relative; }
-    .modal .close-btn { position: absolute; top: 8px; right: 12px; background: none; border: none; color: #888; font-size: 24px; cursor: pointer; }
-    .modal h2 { color: #f0a0c0; margin-bottom: 12px; }
+    .modal-box { background: #12122a; border: 1px solid #5a3a6a; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; position: relative; max-height: 80vh; overflow-y: auto; }
+    .modal-box h2 { color: #f0a0c0; margin-bottom: 16px; }
+    .close-btn { position: absolute; top: 12px; right: 16px; font-size: 24px; color: #888; background: none; border: none; cursor: pointer; }
     
-    .profile-row { margin-bottom: 6px; font-size: 14px; }
-    .profile-row .label { color: #888; }
-    
-    .shop-item { display: flex; justify-content: space-between; align-items: center; background: #1a1a3a; padding: 10px; margin-bottom: 8px; border-radius: 8px; }
-    .shop-item button { background: #4ade80; color: #000; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    /* Тосты */
+    #toasts { position: fixed; top: 10px; left: 10px; right: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast { background: #1a1a3a; border-left: 4px solid #f0a0c0; color: #fff; padding: 12px; border-radius: 6px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); animation: slideDown 0.3s ease-out; }
+    .toast.error { border-color: #a04040; }
+    .toast.success { border-color: #4ade80; }
+    @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-    #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 16px; padding: 20px; display: none; }
-    #login-screen h1 { font-size: 28px; color: #f0a0c0; text-align: center; }
-    #login-screen input { background: #0a0a1a; border: 1px solid #3a3a5a; border-radius: 10px; padding: 12px 20px; color: #e0e0e0; font-size: 16px; outline: none; width: 260px; text-align: center; }
-    #login-screen button { background: linear-gradient(135deg, #5a2a6a, #3a1a4a); border: 1px solid #7a4a8a; border-radius: 10px; color: #f0e0f0; padding: 12px 40px; font-size: 16px; cursor: pointer; }
+    /* Магазин */
+    .shop-item { display: flex; justify-content: space-between; align-items: center; background: #1a1a3a; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
+    .shop-item button { background: #4ade80; color: #000; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <!-- Загрузка -->
-  <div id="loading-screen">
-    <h1>НЭО-ЭДО<br>Пепел Сакуры</h1>
+
+  <!-- ЭКРАН 1: ЗАГРУЗКА -->
+  <div id="screen-loading" class="screen active">
+    <h1>НЭО-ЭДО</h1>
     <div class="spinner"></div>
-    <p style="color:#888;">Подключение к серверам Эдо...</p>
+    <p style="color:#888; font-size:12px;">Инициализация нейросети...</p>
   </div>
 
-  <div id="orientation-lock"><div class="icon">📱</div><h2>Поверните телефон</h2></div>
-  <div id="update-overlay"><div class="spinner"></div><h2>Доступно обновление!</h2></div>
+  <!-- ЭКРАН 2: ВХОД -->
+  <div id="screen-login" class="screen">
+    <div class="content-box">
+      <h1>Пепел Сакуры</h1>
+      <p style="text-align:center; margin-bottom:30px;">Введите ваше имя, странник</p>
+      <input type="text" id="nick-input" placeholder="Ваш никнейм" maxlength="16" autocomplete="off">
+      <button class="btn" id="btn-login" style="margin-top:20px;">Подключиться</button>
+    </div>
+  </div>
 
-  <div id="game-container">
-    <div class="header">
-      <div class="resources">
-        <div class="resource-item"><span>💰</span><span class="value" id="hud-credits">0</span></div>
-        <div class="resource-item"><span>⚡</span><span class="value" id="hud-energy">0</span></div>
-        <div class="resource-item"><span>💎</span><span class="value" id="hud-shards">0</span></div>
-        <button class="shop-btn" id="open-shop">🛍️ Магазин</button>
+  <!-- ЭКРАН 3: ПРЕДЫСТОРИЯ -->
+  <div id="screen-lore" class="screen">
+    <div class="content-box">
+      <h1>Год 2142</h1>
+      <p>Великая Синтоистская Империя пала. Неоновые вывески корпораций заменили солнечный свет, а древние храмы превратились в серверные стойки.</p>
+      <p>Клан «Пепел Сакуры» — последний оплот свободы в мегаполисе НЭО-ЭДО. Вы — избранный, чей разум был оцифрован и пробужден после столетий сна.</p>
+      <p>Ваша задача — отстроить убежище, собрать ресурсы и бросить вызов техно-баронам. Судьба Эдо в ваших руках.</p>
+      <button class="btn" id="btn-to-classes">Принять судьбу</button>
+    </div>
+  </div>
+
+  <!-- ЭКРАН 4: ВЫБОР КЛАССА -->
+  <div id="screen-classes" class="screen">
+    <div class="content-box">
+      <h1 style="margin-bottom:10px;">Выберите путь</h1>
+      <div class="class-grid">
+        <div class="class-card" onclick="selectClass('samurai')">
+          <h3>⚔️ Кибер-Самурай</h3>
+          <p>Мастер клинка и кода. Начинает с улучшенной Кузницей (Ур. 2).</p>
+        </div>
+        <div class="class-card" onclick="selectClass('monk')">
+          <h3>⛩️ Техно-Монах</h3>
+          <p>Черпает силу из сети. Получает +50 к максимальной энергии.</p>
+        </div>
+        <div class="class-card" onclick="selectClass('merchant')">
+          <h3>💼 Торговец</h3>
+          <p>Знает цену кредитам. Начинает с дополнительными 500 кредитами.</p>
+        </div>
       </div>
-      <div class="nickname" id="hud-nickname" title="Мой профиль">—</div>
-      <div class="level-badge" id="hud-level">Ур. 1</div>
+    </div>
+  </div>
+
+  <!-- ЭКРАН 5: ИГРА -->
+  <div id="screen-game" class="screen">
+    <!-- Шапка HUD -->
+    <div class="hud">
+      <div class="hud-item"><span>💰</span><span class="val" id="hud-credits">0</span></div>
+      <div class="hud-item"><span>⚡</span><span class="val" id="hud-energy">0</span></div>
+      <div class="hud-item"><span>💎</span><span class="val" id="hud-shards">0</span></div>
+      <div class="hud-item nickname" onclick="openProfile(myNickname)"><span>👤</span><span class="val" id="hud-nickname">---</span></div>
     </div>
 
-    <div class="main-grid">
-      <div class="panel">
-        <h3>🏗️ Постройки</h3>
-        <div class="scroll-area" id="buildings-list"></div>
+    <!-- Вкладки -->
+    <div class="tabs">
+      <!-- Вкладка: Город -->
+      <div id="tab-city" class="tab-content active">
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+          <h3 style="color:#f0a0c0;">Город</h3>
+          <button class="btn-upg" onclick="toggleShop()" style="padding:4px 10px; font-size:12px;">🛍️ Магазин</button>
+        </div>
+        <div id="buildings-list"></div>
       </div>
 
-      <div class="panel">
-        <h3>💬 Общий чат</h3>
-        <div class="scroll-area chat-messages" id="chat-messages"></div>
+      <!-- Вкладка: Чат -->
+      <div id="tab-chat" class="tab-content">
+        <div id="chat-messages"></div>
         <div class="chat-input-row">
-          <input type="text" id="chat-input" placeholder="Сообщение..." maxlength="200">
+          <input type="text" id="chat-input" placeholder="Сообщение в эфир..." maxlength="100">
           <button id="chat-send">➤</button>
         </div>
       </div>
 
-      <div class="panel panel-guild">
-        <h3>⚔️ Гильдия</h3>
-        <div class="scroll-area" id="guild-content">
-          <div id="guild-info" style="font-size:13px; margin-bottom:8px; color:#aaa;">Вы не в гильдии</div>
-          <div class="guild-create" id="guild-create-form" style="display:none;">
-            <input type="text" id="guild-name-input" placeholder="Название" maxlength="20">
-            <button id="guild-create-btn">Создать (500💰)</button>
-          </div>
-          <div id="guild-members-list"></div>
+      <!-- Вкладка: Гильдия -->
+      <div id="tab-guild" class="tab-content">
+        <h3 style="color:#f0a0c0; margin-bottom:10px;">Гильдия</h3>
+        <div id="guild-info" style="margin-bottom:10px; font-size:14px; color:#aaa;">Вы не в гильдии</div>
+        <div id="guild-create-form">
+          <input type="text" id="guild-name-input" placeholder="Название гильдии" style="margin-bottom:10px;">
+          <button class="btn-upg" style="width:100%;" onclick="createGuild()">Создать (500💰)</button>
         </div>
+        <div id="guild-members-list" style="margin-top:15px;"></div>
       </div>
     </div>
-  </div>
 
-  <div id="login-screen">
-    <h1>НЭО-ЭДО</h1>
-    <input type="text" id="nickname-input" placeholder="Введите ник" maxlength="16" autocomplete="off">
-    <button id="login-btn">Войти</button>
-  </div>
-
-  <div id="toast-container"></div>
-
-  <!-- Модалка профиля -->
-  <div id="profile-modal" class="modal">
-    <div class="modal-content">
-      <button class="close-btn" id="profile-close">×</button>
-      <h2 id="profile-nickname">Профиль</h2>
-      <div id="profile-body"></div>
+    <!-- Нижнее меню -->
+    <div class="bottom-nav">
+      <div class="nav-btn active" data-tab="city" onclick="switchTab('city')">🏙️</div>
+      <div class="nav-btn" data-tab="chat" onclick="switchTab('chat')">💬</div>
+      <div class="nav-btn" data-tab="guild" onclick="switchTab('guild')">⚔️</div>
     </div>
   </div>
 
-  <!-- Модалка магазина -->
-  <div id="shop-modal" class="modal">
-    <div class="modal-content">
-      <button class="close-btn" id="shop-close">×</button>
+  <!-- Модалки -->
+  <div id="modal-profile" class="modal">
+    <div class="modal-box">
+      <button class="close-btn" onclick="closeModal('modal-profile')">×</button>
+      <h2 id="profile-title">Профиль</h2>
+      <div id="profile-content" style="font-size:14px; line-height:1.6;"></div>
+    </div>
+  </div>
+
+  <div id="modal-shop" class="modal">
+    <div class="modal-box">
+      <button class="close-btn" onclick="closeModal('modal-shop')">×</button>
       <h2>🛍️ Магазин Осколков</h2>
       <div class="shop-item">
-        <div><b>+50 Энергии</b><br><small>Восстанавливает энергию</small></div>
+        <div><b>+50 Энергии</b></div>
         <button onclick="buyItem('energy')">💎 5</button>
       </div>
       <div class="shop-item">
-        <div><b>+1000 Кредитов</b><br><small>Мгновенный бонус</small></div>
+        <div><b>+1000 Кредитов</b></div>
         <button onclick="buyItem('credits')">💎 10</button>
       </div>
       <div class="shop-item">
-        <div><b>Мгновенная стройка</b><br><small>Завершает все постройки</small></div>
+        <div><b>Мгновенная стройка</b></div>
         <button onclick="buyItem('instantBuild')">💎 15</button>
       </div>
     </div>
   </div>
 
+  <div id="toasts"></div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const CURRENT_VERSION = '1.0.0';
     const socket = io();
-    let myPlayer = null, myNickname = null, currentGuild = null, chatMessages = [];
+    let myPlayer = null;
+    let myNickname = null;
+    let currentGuild = null;
 
-    const $ = (id) => document.getElementById(id);
-    
-    function formatNumber(n) { return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(Math.floor(n)); }
-    
-    function showToast(message, type = 'info') {
-      const toast = document.createElement('div'); toast.className = `toast ${type}`; toast.textContent = message;
-      $('toast-container').appendChild(toast);
-      setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3500);
+    // --- Навигация по экранам ---
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
     }
 
+    // --- Тосты ---
+    function showToast(msg, type = 'info') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      document.getElementById('toasts').appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = '0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
+    }
+
+    // --- Старт ---
+    setTimeout(() => {
+      showScreen('screen-login');
+      const saved = localStorage.getItem('neo_edo_nick');
+      if (saved) document.getElementById('nick-input').value = saved;
+    }, 1000); // Имитация загрузки
+
+    document.getElementById('btn-login').onclick = () => {
+      const nick = document.getElementById('nick-input').value.trim();
+      if (nick.length < 2) return showToast('Ник слишком короткий', 'error');
+      localStorage.setItem('neo_edo_nick', nick);
+      socket.emit('register', nick);
+    };
+
+    // --- Обработка регистрации ---
+    socket.on('registered', (player) => {
+      myPlayer = player;
+      myNickname = player.nickname;
+      
+      if (!player.playerClass) {
+        showScreen('screen-lore');
+      } else {
+        startGame();
+      }
+    });
+
+    document.getElementById('btn-to-classes').onclick = () => showScreen('screen-classes');
+
+    // --- Выбор класса ---
+    window.selectClass = (cls) => {
+      socket.emit('setClass', cls);
+    };
+
+    socket.on('classUpdated', (player) => {
+      myPlayer = player;
+      startGame();
+    });
+
+    function startGame() {
+      showScreen('screen-game');
+      socket.emit('setOnline', myNickname);
+      updateHUD();
+      renderBuildings();
+      renderGuild();
+    }
+
+    // --- Обновление HUD ---
     function updateHUD() {
       if (!myPlayer) return;
-      const setVal = (id, val) => { const el = $(id); if (el.textContent !== val) el.textContent = val; };
+      const setVal = (id, val) => { const el = document.getElementById(id); if (el.textContent !== val) el.textContent = val; };
       setVal('hud-credits', formatNumber(myPlayer.credits));
       setVal('hud-energy', formatNumber(myPlayer.energy));
       setVal('hud-shards', formatNumber(myPlayer.shards));
       setVal('hud-nickname', myPlayer.nickname);
-      setVal('hud-level', 'Ур. ' + myPlayer.level);
     }
 
-    // Принудительное обновление стейта с сервера (чтобы видеть пассивный доход)
-    setInterval(() => { socket.emit('getProfile', myNickname); }, 5000);
-
-    async function checkForUpdates() {
-      try {
-        const res = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' });
-        const data = await res.json();
-        if (data.version && data.version !== CURRENT_VERSION) {
-          $('update-overlay').classList.add('active');
-          setTimeout(() => location.reload(true), 1500); return false;
-        }
-        return true;
-      } catch { return true; }
+    function formatNumber(n) {
+      return n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : Math.floor(n);
     }
 
-    checkForUpdates().then(canProceed => {
-      if (!canProceed) return;
-      setTimeout(() => {
-        $('loading-screen').style.opacity = '0';
-        setTimeout(() => $('loading-screen').style.display = 'none', 500);
-        
-        const savedNick = localStorage.getItem('neo_edo_nick');
-        if (savedNick) $('nickname-input').value = savedNick;
-        $('login-screen').style.display = 'flex';
-        
-        $('login-btn').onclick = () => {
-          const nick = $('nickname-input').value.trim();
-          if (nick.length < 2) return showToast('Ник слишком короткий', 'error');
-          localStorage.setItem('neo_edo_nick', nick); socket.emit('register', nick);
-        };
-      }, 1500); // Задержка для красоты загрузки
-    });
+    // Запрос обновления профиля раз в 5 сек
+    setInterval(() => {
+      if (myNickname && document.getElementById('screen-game').classList.contains('active')) {
+        socket.emit('getProfile', myNickname);
+      }
+    }, 5000);
 
-    socket.on('registered', (player) => {
-      myPlayer = player; myNickname = player.nickname;
-      $('login-screen').style.display = 'none'; $('game-container').style.display = 'flex';
-      updateHUD(); renderBuildings(); renderGuild(); 
-      socket.emit('setOnline', myNickname);
-      showToast('Успешный вход в Эдо', 'success');
-    });
+    // --- Вкладки ---
+    window.switchTab = (tabName) => {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      document.querySelector(`.nav-btn[data-tab="${tabName}"]`).classList.add('active');
+      
+      // Автоскролл чата при открытии
+      if (tabName === 'chat') {
+        const chat = document.getElementById('chat-messages');
+        chat.scrollTop = chat.scrollHeight;
+      }
+    };
 
-    socket.on('chatMessage', (msg) => {
-      chatMessages.push(msg); if (chatMessages.length > 100) chatMessages.shift();
-      const chatEl = $('chat-messages');
-      const div = document.createElement('div'); div.className = 'chat-msg';
-      div.innerHTML = `<span class="from" data-nick="${msg.from}">${msg.from}</span>: <span class="text">${escapeHtml(msg.text)}</span>`;
-      div.querySelector('.from').onclick = () => socket.emit('getProfile', msg.from);
-      chatEl.appendChild(div);
-      chatEl.scrollTop = chatEl.scrollHeight;
-    });
-
-    socket.on('shardFound', () => {
-      showToast('✨ Вы нашли Осколок Сакуры!', 'success');
-      myPlayer.shards += 1; updateHUD();
-    });
-
-    socket.on('buildingUpdated', ({ id, building }) => { if (myPlayer) { myPlayer.buildings[id] = building; renderBuildings(); } });
-    socket.on('buildingCompleted', ({ id, building }) => { if (myPlayer) { myPlayer.buildings[id] = building; renderBuildings(); showToast('Постройка улучшена!', 'success'); } });
-    
-    socket.on('incomeUpdated', (lvl) => { myPlayer.incomeLevel = lvl; renderBuildings(); });
-
-    socket.on('guildUpdated', (guild) => {
-      currentGuild = guild;
-      if (myPlayer && guild) { myPlayer.guildId = guild.id; myPlayer.guildRole = guild.members[myNickname] || 'private'; }
-      renderGuild();
-    });
-
-    socket.on('profileData', (p) => {
-      $('profile-nickname').textContent = p.nickname + (p.nickname === myNickname ? ' (Вы)' : '');
-      let html = `<div class="profile-row"><span class="label">Уровень:</span> ${p.level}</div>
-                  <div class="profile-row"><span class="label">Гильдия:</span> ${p.guild}</div>
-                  <div class="profile-row"><span class="label">Кредиты:</span> ${formatNumber(p.credits)}</div>
-                  <div class="profile-row"><span class="label">Осколки:</span> ${p.shards}</div>
-                  <div class="profile-row"><span class="label">Уровень дохода:</span> ${p.incomeLevel}</div>`;
-      $('profile-body').innerHTML = html; $('profile-modal').classList.add('active');
-    });
-
-    socket.on('shopSuccess', (data) => {
-      myPlayer.shards = data.newShards; myPlayer.credits = data.newCredits; myPlayer.energy = data.newEnergy;
-      updateHUD(); showToast('Покупка успешна!', 'success');
-    });
-
-    socket.on('error', (msg) => showToast(msg, 'error'));
-
+    // --- Постройки ---
     const BUILDING_NAMES = { house: '🏠 Дом', forge: '🔨 Кузница', shrine: '⛩️ Святилище', datacenter: '🖥️ Дата-центр' };
     
     function renderBuildings() {
       if (!myPlayer) return;
-      const container = $('buildings-list');
+      const container = document.getElementById('buildings-list');
       
       if (container.children.length === 0) {
-        // Карточка улучшения дохода
-        const incCard = document.createElement('div'); incCard.className = 'building-card income-card';
-        incCard.innerHTML = `<div class="info"><div class="name">📈 Улучшить доход</div>
-          <div class="level">Ур. <span id="inc-lvl"></span> (x<span id="inc-mult"></span> к доходу)</div></div>
-          <button id="btn-upgrade-income">Улучшить</button>`;
-        incCard.querySelector('button').onclick = () => socket.emit('upgradeIncome');
-        container.appendChild(incCard);
+        // Улучшение дохода
+        const inc = document.createElement('div');
+        inc.className = 'building-card income-card';
+        inc.innerHTML = `<div class="info"><div class="name">📈 Улучшить доход</div>
+          <div class="level">Ур. <span id="inc-lvl"></span></div></div>
+          <button class="btn-upg" id="btn-inc">Улучшить</button>`;
+        inc.querySelector('button').onclick = () => socket.emit('upgradeIncome');
+        container.appendChild(inc);
 
-        for (const id of Object.keys(BUILDING_NAMES)) {
-          const card = document.createElement('div'); card.className = 'building-card'; card.dataset.id = id;
+        for (const id in BUILDING_NAMES) {
+          const card = document.createElement('div');
+          card.className = 'building-card';
+          card.dataset.id = id;
           card.innerHTML = `<div class="info"><div class="name">${BUILDING_NAMES[id]}</div>
-            <div class="level">Ур. <span class="lvl-val"></span></div><div class="timer"></div></div>
-            <button>Улучшить</button>`;
+            <div class="level">Ур. <span class="lvl-val"></span></div>
+            <div class="timer"></div></div>
+            <button class="btn-upg">Улучшить</button>`;
           card.querySelector('button').onclick = () => socket.emit('upgradeBuilding', id);
           container.appendChild(card);
         }
       }
 
-      // Обновление данных дохода
-      $('inc-lvl').textContent = myPlayer.incomeLevel;
-      $('inc-mult').textContent = (1 + (myPlayer.incomeLevel - 1) * 0.5).toFixed(1);
-      $('btn-upgrade-income').textContent = `Улучшить (${myPlayer.incomeLevel * 500}💰)`;
+      // Обновление данных
+      document.getElementById('inc-lvl').textContent = myPlayer.incomeLevel;
+      document.getElementById('btn-inc').textContent = `Улучшить (${myPlayer.incomeLevel * 500}💰)`;
 
-      for (const id of Object.keys(BUILDING_NAMES)) {
-        const b = myPlayer.buildings[id], card = container.querySelector(`[data-id="${id}"]`);
+      for (const id in BUILDING_NAMES) {
+        const b = myPlayer.buildings[id];
+        const card = container.querySelector(`[data-id="${id}"]`);
         if (!card) continue;
-        if (card.querySelector('.lvl-val').textContent !== String(b.level)) card.querySelector('.lvl-val').textContent = b.level;
-        const timerEl = card.querySelector('.timer'), btn = card.querySelector('button');
-        if (b.upgrading && b.upgradeEnd) {
+        
+        card.querySelector('.lvl-val').textContent = b.level;
+        const timerEl = card.querySelector('.timer');
+        const btn = card.querySelector('button');
+        
+        if (b.upgrading) {
           const rem = Math.max(0, Math.ceil((b.upgradeEnd - Date.now()) / 1000));
-          if (timerEl.textContent !== `⏳ ${rem}с`) timerEl.textContent = `⏳ ${rem}с`;
-          if (!btn.disabled) btn.disabled = true;
+          timerEl.textContent = `⏳ ${rem}с`;
+          btn.disabled = true;
         } else {
-          if (timerEl.textContent !== '') timerEl.textContent = '';
-          if (btn.disabled) btn.disabled = false;
+          timerEl.textContent = '';
+          btn.disabled = false;
         }
       }
     }
-    
+
+    // Таймер для обновления построек
+    setInterval(() => { if (myPlayer) renderBuildings(); }, 1000);
+
+    // --- ЧАТ ---
+    socket.on('chatMessage', (msg) => {
+      const chat = document.getElementById('chat-messages');
+      // Ограничиваем историю (удаляем старые из DOM, чтобы не тормозило)
+      if (chat.children.length > 50) chat.removeChild(chat.firstChild);
+
+      const div = document.createElement('div');
+      div.className = 'chat-msg';
+      div.innerHTML = `<span class="from" onclick="openProfile('${msg.from}')">${msg.from}</span>: <span class="text">${escapeHtml(msg.text)}</span>`;
+      chat.appendChild(div);
+      
+      // Автоскролл, если мы на вкладке чата
+      if (document.getElementById('tab-chat').classList.contains('active')) {
+        chat.scrollTop = chat.scrollHeight;
+      }
+    });
+
+    document.getElementById('chat-send').onclick = () => {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (text) {
+        socket.emit('chatMessage', text);
+        input.value = '';
+      }
+    };
+
+    document.getElementById('chat-input').onkeypress = (e) => {
+      if (e.key === 'Enter') document.getElementById('chat-send').click();
+    };
+
     function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 
-    function renderGuild() {
-      if (!myPlayer) return;
-      if (!myPlayer.guildId || !currentGuild) {
-        $('guild-info').textContent = 'Вы не в гильдии';
-        $('guild-create-form').style.display = 'flex'; $('guild-members-list').innerHTML = ''; return;
-      }
-      $('guild-create-form').style.display = 'none';
-      $('guild-info').textContent = `Гильдия: ${currentGuild.name}`;
-      const myRole = currentGuild.members[myNickname];
-      let html = '';
-      for (const [nick, role] of Object.entries(currentGuild.members)) {
-        const roleLabel = { leader: 'Лидер', general: 'Генерал', officer: 'Офицер', private: 'Рядовой' }[role] || role;
-        html += `<div class="guild-member-row"><span class="nick" data-nick="${nick}">${nick}</span> <small>(${roleLabel})</small>`;
-        if (myRole === 'leader' && nick !== myNickname) {
-          html += `<span class="actions"><button onclick="socket.emit('promoteMember', {guildId:'${currentGuild.id}', targetNick:'${nick}'})">⬆</button>
-                   <button onclick="socket.emit('demoteMember', {guildId:'${currentGuild.id}', targetNick:'${nick}'})">⬇</button>
-                   <button onclick="socket.emit('kickMember', {guildId:'${currentGuild.id}', targetNick:'${nick}'})">✕</button></span>`;
-        }
-        html += `</div>`;
-      }
-      $('guild-members-list').innerHTML = html;
-      
-      // Добавляем клики на ники в гильдии
-      document.querySelectorAll('.guild-member-row .nick').forEach(el => {
-        el.onclick = () => socket.emit('getProfile', el.dataset.nick);
-      });
-    }
+    // --- Гильдия ---
+    window.createGuild = () => {
+      const name = document.getElementById('guild-name-input').value.trim();
+      if (name) socket.emit('createGuild', name);
+    };
 
-    $('chat-send').onclick = () => {
-      const text = $('chat-input').value.trim(); if (!text) return;
-      socket.emit('chatMessage', text); $('chat-input').value = '';
+    socket.on('guildUpdated', (guild) => {
+      currentGuild = guild;
+      myPlayer.guildId = guild.id;
+      document.getElementById('guild-create-form').style.display = 'none';
+      document.getElementById('guild-info').textContent = `Гильдия: ${guild.name}`;
+      
+      let html = '';
+      for (const nick in guild.members) {
+        html += `<div style="padding:8px; background:#1a1a3a; margin-bottom:4px; border-radius:6px; cursor:pointer;" onclick="openProfile('${nick}')">${nick} (${guild.members[nick]})</div>`;
+      }
+      document.getElementById('guild-members-list').innerHTML = html;
+    });
+
+    // --- Модалки и Профиль ---
+    window.openProfile = (nick) => {
+      socket.emit('getProfile', nick);
     };
-    $('chat-input').onkeydown = (e) => { if (e.key === 'Enter') $('chat-send').click(); };
-    
-    $('guild-create-btn').onclick = () => {
-      const name = $('guild-name-input').value.trim();
-      if (name) { socket.emit('createGuild', name); $('guild-name-input').value = ''; }
-    };
-    
-    // Модалки
-    $('profile-close').onclick = () => $('profile-modal').classList.remove('active');
-    $('hud-nickname').onclick = () => { if(myNickname) socket.emit('getProfile', myNickname); };
-    $('open-shop').onclick = () => $('shop-modal').classList.add('active');
-    $('shop-close').onclick = () => $('shop-modal').classList.remove('active');
-    
+
+    socket.on('profileData', (p) => {
+      // Если смотрим свой профиль — обновляем HUD
+      if (p.nickname === myNickname) {
+        myPlayer.credits = p.credits;
+        myPlayer.shards = p.shards;
+        updateHUD();
+      }
+      
+      document.getElementById('profile-title').textContent = p.nickname;
+      document.getElementById('profile-content').innerHTML = `
+        <b>Класс:</b> ${p.playerClass || 'Не выбран'}<br>
+        <b>Уровень:</b> ${p.level}<br>
+        <b>Гильдия:</b> ${p.guild}<br>
+        <b>Кредиты:</b> ${formatNumber(p.credits)}<br>
+        <b>Осколки:</b> ${p.shards}<br>
+        <b>Доход:</b> Ур. ${p.incomeLevel}
+      `;
+      document.getElementById('modal-profile').classList.add('active');
+    });
+
+    window.toggleShop = () => document.getElementById('modal-shop').classList.add('active');
+    window.closeModal = (id) => document.getElementById(id).classList.remove('active');
     window.buyItem = (item) => socket.emit('buyItem', item);
 
-    setInterval(() => { if (myPlayer) renderBuildings(); }, 1000);
+    // --- События с сервера ---
+    socket.on('shardFound', () => {
+      if(myPlayer) { myPlayer.shards++; updateHUD(); }
+      showToast('✨ Вы нашли Осколок Сакуры!', 'success');
+    });
+
+    socket.on('buildingUpdated', ({ id, building }) => { if(myPlayer) myPlayer.buildings[id] = building; });
+    socket.on('buildingCompleted', ({ id, building }) => {
+      if(myPlayer) myPlayer.buildings[id] = building;
+      renderBuildings();
+      showToast('Постройка улучшена!', 'success');
+    });
+    
+    socket.on('incomeUpdated', (lvl) => { if(myPlayer) { myPlayer.incomeLevel = lvl; renderBuildings(); } });
+    
+    socket.on('shopSuccess', (data) => {
+      if(myPlayer) { myPlayer.shards = data.newShards; myPlayer.credits = data.newCredits; myPlayer.energy = data.newEnergy; }
+      updateHUD();
+      showToast('Покупка успешна!', 'success');
+    });
+
+    socket.on('error', (msg) => showToast(msg, 'error'));
+
   </script>
 </body>
 </html>
